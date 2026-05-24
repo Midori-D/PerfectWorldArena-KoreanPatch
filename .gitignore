@@ -1,0 +1,6 @@
+*.asar
+*.bak
+*.backup
+logs/
+work/
+pwa_korean_patch_work/

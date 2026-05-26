@@ -31,14 +31,14 @@ Perfect World Arena Korean UI Patch
 * 일부 중국어 문구는 아직 번역되지 않았을 수 있습니다.
 <br /> Some Chinese UI strings may remain untranslated.
 
-## 📝 Changelog
+## 📝수정사항 / Changelog
 
 ```
 ## [1.0.0] - 2026-05-24
 - Released
 ```
 
-## 🙏 Credits
+## 🙏 특별 감사 / Credits
 * Midori server ops team
 * Perfect World Arena
 
@@ -49,6 +49,6 @@ Perfect World Arena Korean UI Patch
 <br /> This project is not affiliated with Perfect World Arena, Valve, Steam, or Perfect World.
 <br /> This is an unofficial fan-made Korean UI patch.
 
-## 📄 License
+## 📄 라이센스 / License
 
 * MIT

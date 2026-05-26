@@ -9,7 +9,8 @@ if %errorlevel% neq 0 (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('관리자 권한이 필요합니다.`napply_patch.bat을 우클릭한 뒤 ''관리자 권한으로 실행''을 선택해 주세요.', 'Perfect World Arena Korean Patch', 'OK', 'Warning')"
   color 0C
   echo.
-  echo [error] 관리자 권한이 필요합니다. apply_patch.bat을 우클릭한 뒤 "관리자 권한으로 실행"을 선택해 주세요.
+  echo [error] 관리자 권한이 필요합니다.
+  echo apply_patch.bat을 우클릭한 뒤 "관리자 권한으로 실행"을 선택해 주세요.
   echo.
   pause
   exit /b 1
@@ -20,28 +21,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-Process | Where
 if %errorlevel% neq 0 (
   color 0C
   echo.
-  echo [error] Perfect World Arena가 실행 중입니다. 패치 전 完美世界竞技平台을 완전히 종료해 주세요.
+  echo [error] Perfect World Arena가 실행 중입니다.
+  echo 패치 전 完美世界竞技平台을 완전히 종료해 주세요.
   echo.
   pause
   exit /b 1
 )
 
 cls
-type "%~dp0intro.txt"
+if exist "%~dp0intro.txt" (
+  type "%~dp0intro.txt"
+) else (
+  echo ============================================================
+  echo   Perfect World Arena Korean Patch
+  echo   완미세계 경기 플랫폼 한국어 패치
+  echo ============================================================
+)
 echo(
 powershell -NoProfile -Command "Write-Host 'Created by Midori, Team Ataks' -ForegroundColor Magenta"
 echo(
-echo [주의사항]
-echo( 1. 패치 전 Perfect World Arena를 완전히 종료해 주세요.
-echo( 2. 이 패치는 app.asar를 백업한 뒤 로컬에서 수정합니다.
-echo( 3. 클라이언트 업데이트 후에는 패치가 풀릴 수 있습니다.
-echo( 4. 문제가 생기면 생성된 백업 파일로 복구할 수 있습니다.
-echo( 5. 안티치트 우회, 메모리 변조, DLL 주입 기능은 포함하지 않습니다.
-echo(
-echo [설치 경로]
-echo( C:\Program Files (x86)\perfectworldarena
-echo(
-echo 시작하려면 아무 키나 눌러주세요.
+
 pause >nul
 
 cls

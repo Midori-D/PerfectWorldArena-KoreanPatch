@@ -195,11 +195,10 @@ function patchEnumMappings(files) {
     { key: "CsgoRoom", zh: "玩", ko: "플레이" },
     { key: "ReturnRoom", zh: "返回房间", ko: "방 복귀" },
     { key: "CupPage", zh: "赛事", ko: "대회" },
-    { key: "PersonalPage", zh: "数据", ko: "데이터" },
+    { key: "PersonalPage", zh: "数据", ko: "전적" },
     { key: "CommunityPage", zh: "创意工坊", ko: "창작마당" },
     { key: "GroupCommunity", zh: "社交", ko: "소셜" },
     { key: "SocialPage", zh: "大厅", ko: "로비" },
-    { key: "SeeSeeTV", zh: "PRO TV", ko: "PRO TV" },
     { key: "JusticePage", zh: "正义大厅", ko: "제재 센터" },
     { key: "Justice", zh: "正义", ko: "제재" },
     { key: "ActivityPage", zh: "活动", ko: "이벤트" },
@@ -244,50 +243,6 @@ function patchEnumMappings(files) {
   log(`[summary:enum-mappings] changed=${total}`);
 }
 
-// 상단 탭 패치
-function patchTopLabelFields(files) {
-  const mappings = [
-    { field: "label", zh: "首页", ko: "홈" },
-    { field: "label", zh: "排行榜", ko: "랭킹" },
-    { field: "label", zh: "任务中心", ko: "미션 센터" },
-    { field: "label", zh: "服饰室", ko: "의상실" },
-    { field: "label", zh: "创意工坊", ko: "창작마당" },
-    { field: "label", zh: "PRO TV", ko: "PRO TV" }
-  ];
-
-  let total = 0;
-
-  for (const full of files) {
-    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
-
-    let text;
-    try {
-      text = readText(full);
-    } catch {
-      continue;
-    }
-
-    let changed = 0;
-
-    for (const { field, zh, ko } of mappings) {
-      const re = makeFieldRegex(field, zh);
-
-      text = text.replace(re, (match, prefix, quote) => {
-        changed++;
-        total++;
-        log(`[${rel}] ${zh} -> ${ko}`);
-        return `${prefix}${quote}${ko}${quote}`;
-      });
-    }
-
-    if (changed > 0) {
-      writeText(full, text);
-    }
-  }
-
-  log(`[summary:top-label-fields] changed=${total}`);
-}
-
 function patchSafeFieldMappings(files) {
   const mappings = [
     // 오른쪽 메뉴처럼 필드 기반으로 확인된 것만
@@ -309,7 +264,13 @@ function patchSafeFieldMappings(files) {
     { field: "title", zh: "我的战绩", ko: "내 전적" },
 
     { field: "text", zh: "意见反馈", ko: "의견 보내기" },
-    { field: "text", zh: "客服反馈", ko: "고객센터/피드백" }
+    { field: "text", zh: "客服反馈", ko: "고객센터/피드백" },
+
+    { field: "label", zh: "首页", ko: "홈" },
+    { field: "label", zh: "排行榜", ko: "랭킹" },
+    { field: "label", zh: "任务中心", ko: "미션 센터" },
+    { field: "label", zh: "服饰室", ko: "의상실" },
+    { field: "label", zh: "创意工坊", ko: "창작마당" }
   ];
 
   let total = 0;
@@ -347,7 +308,6 @@ function patchSafeFieldMappings(files) {
 
 function patchVueTextContext(files) {
   const rules = [
-    // 게임 시작 버튼: 화면에서 성공 확인
     {
       name: "start-game-button",
       from: "开始游戏",
@@ -355,7 +315,6 @@ function patchVueTextContext(files) {
       regex: /(matchStateEnum\.NONE[\s\S]{0,240}?_v\(["'`])开始游戏(["'`]\))/g
     },
 
-    // 오른쪽 하단 / 홈 버튼의 방 복귀는 더 자연스럽게
     {
       name: "return-room-button",
       from: "返回房间",
@@ -363,11 +322,10 @@ function patchVueTextContext(files) {
       regex: /(matchStateEnum\.HASMATCH[\s\S]{0,260}?_v\(["'`])返回房间(["'`]\))/g
     },
 
-    // 이미 enum 패치 등으로 방 복귀가 들어간 상태에서 버튼만 보정
     {
       name: "return-room-button-ko-adjust",
       from: "방 복귀",
-      to: "방 복귀하기",
+      to: "방 복귀",
       regex: /(matchStateEnum\.HASMATCH[\s\S]{0,260}?_v\(["'`])방 복귀(["'`]\))/g
     }
   ];
@@ -403,6 +361,53 @@ function patchVueTextContext(files) {
   log(`[summary:vue-text-context] changed=${total}`);
 }
 
+// 서버/캐시 데이터로 들어오는 문구를 화면 출력 직전에 한국어로 매핑
+function patchCustomerCenterDynamicText(files) {
+  const rules = [
+    {
+      from: "e._s(e.categoryInfo.entryTitle)",
+      to: `e._s(({"游戏启动慢如何解决?":"게임 실행이 느릴 때 어떻게 하나요?","游戏启动慢如何解决？":"게임 실행이 느릴 때 어떻게 하나요?","游戏启动如何解决?":"게임 실행이 안 되나요?","游戏启动如何解决？":"게임 실행이 안 되나요?"}[e.categoryInfo.entryTitle]||e.categoryInfo.entryTitle))`,
+      logFrom: "游戏启动慢如何解决?",
+      logTo: "게임 실행이 느릴 때 어떻게 하나요?"
+    }
+  ];
+
+  let total = 0;
+
+  for (const full of files) {
+    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
+
+    let text;
+    try {
+      text = readText(full);
+    } catch {
+      continue;
+    }
+
+    let changed = 0;
+
+    for (const rule of rules) {
+      if (!text.includes(rule.from)) continue;
+
+      const count = text.split(rule.from).length - 1;
+      text = text.split(rule.from).join(rule.to);
+
+      for (let i = 0; i < count; i++) {
+        changed++;
+        total++;
+        log(`[${rel}] ${rule.logFrom} -> ${rule.logTo}`);
+      }
+    }
+
+    if (changed > 0) {
+      writeText(full, text);
+    }
+  }
+
+  log(`[summary:customer-center-dynamic-text] changed=${total}`);
+}
+
+// 문자열 전체가 정확히 일치할 때만 매핑
 function patchExactStringLiteral(files) {
   const mappings = [
     ["关闭", "닫기"],
@@ -413,7 +418,32 @@ function patchExactStringLiteral(files) {
     ["比赛结束", "경기 종료"],
     ["个人主页", "개인 페이지"],
     ["平台设置", "플랫폼 설정"],
-    ["我的战绩", "내 전적"]
+    ["我的战绩", "내 전적"],
+
+    // 마우스를 갖다대면 나오는 글
+    ["正在匹配天梯赛", "매칭 중"],
+    ["正在进行天梯赛", "경기 진행 중"],
+
+    // 메인 페이지
+    ["Steam未登录", "Steam 로그인 필요"],
+    ["房间号/昵称/SteamID", "방 번호/닉네임/SteamID"],
+    ["前往查看详情>>", "자세히 보기>>"],
+    ["系统检测您尚未登录Steam/蒸汽平台，请您开启并登录后重试", "Steam에 로그인되어 있지 않습니다. Steam을 실행하고 로그인한 뒤 다시 시도해 주세요."],
+    ["完美战力未上榜", "완미 전투력 미랭크"],
+    ["本周举报", "주간 신고"],
+    ["已处理", "처리됨"],
+    ["正义审核", "제재 심사"],
+    ["已判决", "판정 완료"],
+    ["待审核", "대기 중"],
+    ["昨日封禁", "어제의 제재"],
+    ["PAC封禁", "PAC 제재"],
+    ["其他封禁", "기타 제재"],
+
+    // 숙련도 페이지
+    ["老兵玩家", "베테랑"],
+    ["优秀", "우수"],
+    ["老兵", "베테랑"]
+
   ];
 
   let total = 0;
@@ -451,10 +481,12 @@ function patchExactStringLiteral(files) {
   log(`[summary:exact-string-literal] changed=${total}`);
 }
 
-function patchExactStringLiteralExtra(files) {
+// 프로필 번역
+function patchProfileVueTextContext(files) {
   const mappings = [
-    ["Steam未登录", "Steam 로그인 필요"],
-    ["房间号/昵称/SteamID", "방 번호/닉네임/SteamID"]
+    // 메인 페이지
+    ["当前身份:", "현재 신분:"],
+    ["信誉等级:", "신용 등급:"]
   ];
 
   let total = 0;
@@ -472,16 +504,16 @@ function patchExactStringLiteralExtra(files) {
     let changed = 0;
 
     for (const [zh, ko] of mappings) {
-      const z = escapeRegExp(zh);
+      if (!text.includes(zh)) continue;
 
-      const re = new RegExp(`(["'\`])${z}\\1`, "g");
+      const count = text.split(zh).length - 1;
+      text = text.split(zh).join(ko);
 
-      text = text.replace(re, (match, quote) => {
+      for (let i = 0; i < count; i++) {
         changed++;
         total++;
         log(`[${rel}] ${zh} -> ${ko}`);
-        return `${quote}${ko}${quote}`;
-      });
+      }
     }
 
     if (changed > 0) {
@@ -489,45 +521,64 @@ function patchExactStringLiteralExtra(files) {
     }
   }
 
-  log(`[summary:exact-string-literal-extra] changed=${total}`);
+  log(`[summary:profile-vue-text-context] changed=${total}`);
 }
 
-// Debug
-function findRemaining(files) {
-  const targets = [
-    "首页",
-    "排行榜",
-    "任务中心",
-    "返回房间",
-    "离开房间",
-    "正义大厅",
-    "正义",
-    "开始游戏"
+// 이미지 에셋 패치
+function patchImageAssets() {
+  const assetsDir = path.join(PATCHER_DIR, "assets");
+
+  const imageMappings = [
+    {
+      from: path.join(assetsDir, "rabbit.8094b2dc.png"),
+      to: path.join(UNPACKED_DIR, "static", "img", "rabbit.8094b2dc.png"),
+      label: "rabbit.8094b2dc.png"
+    },
+    {
+      from: path.join(assetsDir, "zl2026s1_1.d9ccaced.png"),
+      to: path.join(UNPACKED_DIR, "static", "img", "zl2026s1_1.d9ccaced.png"),
+      label: "zl2026s1_1.d9ccaced.png"
+    },
+    // 정의 평가단 이벤트 베너
+    {
+      from: path.join(assetsDir, "justice.e15ebd35.png"),
+      to: path.join(UNPACKED_DIR, "static", "img", "justice.e15ebd35.png"),
+      label: "justice.e15ebd35.png"
+    },
+    // 베테랑 아이콘
+    {
+      from: path.join(assetsDir, "green7.286d29d5.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "green7.286d29d5.svg"),
+      label: "green7.286d29d5.svg"
+    },
+    // 베테랑 아이콘
+    {
+      from: path.join(assetsDir, "green7.h.f4e4240c.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "green7.h.f4e4240c.svg"),
+      label: "green7.h.f4e4240c.svg"
+    }
   ];
 
   let total = 0;
 
-  for (const full of files) {
-    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
-
-    let text;
-    try {
-      text = readText(full);
-    } catch {
+  for (const item of imageMappings) {
+    if (!fs.existsSync(item.from)) {
+      log(`[skip:image] missing patch asset: ${item.from}`);
       continue;
     }
 
-    for (const target of targets) {
-      const count = text.split(target).length - 1;
-
-      if (count > 0) {
-        total += count;
-        remain(`[${rel}] ${target} remains x${count}`);
-      }
+    if (!fs.existsSync(item.to)) {
+      log(`[skip:image] target not found in app.asar: ${item.to}`);
+      continue;
     }
+
+    fs.copyFileSync(item.from, item.to);
+    total++;
+
+    log(`[image] ${item.label} -> patched`);
   }
 
-  remain(`total remaining checked strings: ${total}`);
+  log(`[summary:image-assets] changed=${total}`);
 }
 
 function applyPatches() {
@@ -535,13 +586,12 @@ function applyPatches() {
   log(`[info] target files: ${files.length}`);
 
   patchEnumMappings(files);
-  patchTopLabelFields(files);
-  patchSafeFieldMappings(files);
-  patchVueTextContext(files);
-  patchExactStringLiteral(files);
-  patchExactStringLiteralExtra(files);
-
-  findRemaining(files);
+  patchSafeFieldMappings(files); // 안전한 필드 번역
+  patchVueTextContext(files); // Vue 렌더링 번역
+  patchCustomerCenterDynamicText(files); // 서버/데이터에서 내려온 값을 출력 직전에 번역
+  patchExactStringLiteral(files); // 정확한 문자열 리터럴 번역
+  patchProfileVueTextContext(files); // 프로필 번역
+  patchImageAssets(); // 이미지 리소스 교체
 }
 
 function saveLogs() {

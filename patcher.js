@@ -125,7 +125,7 @@ function walk(dir, out = []) {
 
       if (
         rel === "background.js" ||
-        /^js\/pvp\.[^.]+(\.worker)?\.js$/.test(rel) ||
+        /\.js$/i.test(rel) ||
         /\.(html|json|css|txt)$/i.test(rel)
       ) {
         out.push(full);
@@ -152,9 +152,6 @@ function makeEnumRegex(key, zh) {
   const k = escapeRegExp(key);
   const z = escapeRegExp(zh);
 
-  // 예:
-  // [r["b"].HomePage]:"首页"
-  // [r['b'].ReturnRoom]:'返回房间'
   return new RegExp(
     `(\\[[\\s\\S]{0,160}\\.${k}\\]\\s*:\\s*)(["'\`])${z}\\2`,
     "g"
@@ -165,9 +162,6 @@ function makeDirectKeyRegex(key, zh) {
   const k = escapeRegExp(key);
   const z = escapeRegExp(zh);
 
-  // 예:
-  // HomePage:"首页"
-  // "HomePage":"首页"
   return new RegExp(
     `((?:^|[,{]\\s*)(?:(?:${k})|(?:"${k}")|(?:'${k}'))\\s*:\\s*)(["'\`])${z}\\2`,
     "g"
@@ -178,10 +172,6 @@ function makeFieldRegex(field, zh) {
   const f = escapeRegExp(field);
   const z = escapeRegExp(zh);
 
-  // 예:
-  // label:"首页"
-  // "label":"首页"
-  // title:'返回房间'
   return new RegExp(
     `((?:^|[,{]\\s*)(?:(?:${f})|(?:"${f}")|(?:'${f}'))\\s*:\\s*)(["'\`])${z}\\2`,
     "g"
@@ -243,92 +233,117 @@ function patchEnumMappings(files) {
   log(`[summary:enum-mappings] changed=${total}`);
 }
 
-function patchSafeFieldMappings(files) {
-  const mappings = [
-    // 오른쪽 메뉴처럼 필드 기반으로 확인된 것만
-    { field: "label", zh: "账户", ko: "계정" },
-    { field: "label", zh: "道具", ko: "아이템" },
-    { field: "label", zh: "设置", ko: "설정" },
-    { field: "label", zh: "会员", ko: "회원" },
-    { field: "label", zh: "正义", ko: "제재" },
-    { field: "label", zh: "正义大厅", ko: "제재 센터" },
-
-    { field: "name", zh: "账户", ko: "계정" },
-    { field: "name", zh: "道具", ko: "아이템" },
-    { field: "name", zh: "设置", ko: "설정" },
-    { field: "name", zh: "会员", ko: "회원" },
-    { field: "name", zh: "正义", ko: "제재" },
-
-    { field: "title", zh: "平台设置", ko: "플랫폼 설정" },
-    { field: "title", zh: "个人主页", ko: "개인 페이지" },
-    { field: "title", zh: "我的战绩", ko: "내 전적" },
-
-    { field: "text", zh: "意见反馈", ko: "의견 보내기" },
-    { field: "text", zh: "客服反馈", ko: "고객센터/피드백" },
-
-    { field: "label", zh: "首页", ko: "홈" },
-    { field: "label", zh: "排行榜", ko: "랭킹" },
-    { field: "label", zh: "任务中心", ko: "미션 센터" },
-    { field: "label", zh: "服饰室", ko: "의상실" },
-    { field: "label", zh: "创意工坊", ko: "창작마당" }
-  ];
-
-  let total = 0;
-
-  for (const full of files) {
-    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
-
-    let text;
-    try {
-      text = readText(full);
-    } catch {
-      continue;
-    }
-
-    let changed = 0;
-
-    for (const { field, zh, ko } of mappings) {
-      const re = makeFieldRegex(field, zh);
-
-      text = text.replace(re, (match, prefix, quote) => {
-        changed++;
-        total++;
-        log(`[${rel}] ${zh} -> ${ko}`);
-        return `${prefix}${quote}${ko}${quote}`;
-      });
-    }
-
-    if (changed > 0) {
-      writeText(full, text);
-    }
-  }
-
-  log(`[summary:safe-field-mappings] changed=${total}`);
-}
-
 function patchVueTextContext(files) {
-  const rules = [
+  const mappings = [
+    // 메인 페이지
     {
-      name: "start-game-button",
+      type: "context",
       from: "开始游戏",
       to: "게임 시작",
       regex: /(matchStateEnum\.NONE[\s\S]{0,240}?_v\(["'`])开始游戏(["'`]\))/g
     },
-
     {
-      name: "return-room-button",
+      type: "context",
       from: "返回房间",
       to: "방 복귀하기",
       regex: /(matchStateEnum\.HASMATCH[\s\S]{0,260}?_v\(["'`])返回房间(["'`]\))/g
     },
-
     {
-      name: "return-room-button-ko-adjust",
+      type: "context",
       from: "방 복귀",
       to: "방 복귀",
       regex: /(matchStateEnum\.HASMATCH[\s\S]{0,260}?_v\(["'`])방 복귀(["'`]\))/g
-    }
+    },
+    {
+      type: "text",
+      zh: "完美助手",
+      ko: "완미 도우미",
+      patchPanelTitle: true
+    },
+    {
+      type: "text",
+      zh: "练枪服",
+      ko: "연습 서버",
+      patchPanelTitle: true
+    },
+    {
+      type: "text",
+      zh: "明星时刻",
+      ko: "프로의 품격",
+      patchPanelTitle: true
+    },
+
+    // 런처 상단 작업표시줄
+    {
+      type: "text",
+      zh: "华东",
+      ko: "화동",
+      patchSignalLocation: true
+    },
+    {
+      type: "text",
+      zh: "南方",
+      ko: "남부",
+      patchSignalLocation: true
+    },
+    {
+      type: "text",
+      zh: "西南",
+      ko: "서남",
+      patchSignalLocation: true
+    },
+    {
+      type: "text",
+      zh: "北方",
+      ko: "북부",
+      patchSignalLocation: true
+    },
+    {
+    type: "text",
+    zh: "检测中",
+    ko: "검사 중",
+    patchTrimmedLiteral: true
+    },
+
+    // 친구 탭
+    {
+      type: "text",
+      zh: "黑名单",
+      ko: "차단 목록",
+      patchBlacklistCountText: true
+    },
   ];
+
+  function toUnicodeEscapeLower(str) {
+    return str
+      .split("")
+      .map(ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"))
+      .join("");
+  }
+
+  function toUnicodeEscapeUpper(str) {
+    return str
+      .split("")
+      .map(ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0").toUpperCase())
+      .join("");
+  }
+
+  function toUnicodeEscapedJsString(str) {
+    return `"${toUnicodeEscapeLower(str)}"`;
+  }
+
+  const contextMappings = mappings.filter(m => m.type === "context");
+  const textMappings = mappings.filter(m => m.type === "text");
+
+  const panelTitleMapLiteral = `{${textMappings
+    .filter(m => m.patchPanelTitle)
+    .map(m => `${toUnicodeEscapedJsString(m.zh)}:${JSON.stringify(m.ko)}`)
+    .join(",")}}`;
+
+  const signalLocationMapLiteral = `{${textMappings
+    .filter(m => m.patchSignalLocation)
+    .map(m => `${toUnicodeEscapedJsString(m.zh)}:${JSON.stringify(m.ko)}`)
+    .join(",")}}`;
 
   let total = 0;
 
@@ -344,13 +359,124 @@ function patchVueTextContext(files) {
 
     let changed = 0;
 
-    for (const rule of rules) {
+    // 1. 기존 문맥 기반 패치
+    for (const rule of contextMappings) {
       text = text.replace(rule.regex, (match, prefix, suffix) => {
         changed++;
         total++;
         log(`[${rel}] ${rule.from} -> ${rule.to}`);
         return `${prefix}${rule.to}${suffix}`;
       });
+    }
+
+    // 2. home-task 패널 제목 렌더링 패치
+    // s("p",{class:e.$style["title"]},[e._v(e._s(t.title))])
+    {
+      const panelTitleRenderRegex =
+        /([A-Za-z_$][\w$]*)\("p",\{class:([A-Za-z_$][\w$]*)\.\$style\["title"\]\},\[\2\._v\(\2\._s\(([A-Za-z_$][\w$]*)\.title\)\)\]\)/g;
+
+      text = text.replace(panelTitleRenderRegex, (match, h, vm, panel) => {
+        changed++;
+        total++;
+
+        for (const mapping of textMappings.filter(m => m.patchPanelTitle)) {
+          log(`[${rel}] ${mapping.zh} -> ${mapping.ko}`);
+        }
+
+        return `${h}("p",{class:${vm}.$style["title"]},[${vm}._v(${vm}._s((${panelTitleMapLiteral}[${panel}.title]||${panel}.title)))])`;
+      });
+    }
+
+    // 3. 공백/줄바꿈 포함 문자열 리터럴 패치
+    // e._v("\n            华东\n          ")
+    // "检测结果："
+    // "\u534e\u4e1c"
+    {
+      const ws = String.raw`(?:(?:\\[nrt])|\s)*`;
+
+      for (const mapping of textMappings.filter(m => m.patchTrimmedLiteral)) {
+        const { zh, ko } = mapping;
+
+        const variants = [
+          zh,
+          toUnicodeEscapeLower(zh),
+          toUnicodeEscapeUpper(zh)
+        ];
+
+        for (const variant of variants) {
+          const z = escapeRegExp(variant);
+
+          const re = new RegExp(
+            `(["'\`])(${ws})${z}(${ws})\\1`,
+            "g"
+          );
+
+          text = text.replace(re, (match, quote, before, after) => {
+            changed++;
+            total++;
+            log(`[${rel}] ${zh} -> ${ko}`);
+            return `${quote}${before}${ko}${after}${quote}`;
+          });
+        }
+      }
+    }
+
+    // 네트워크 상태 지역명 렌더링 패치
+    // 실제 원본:
+    // a("span",{staticClass:"city"},[
+    //   a("i",{staticClass:"dot"}),
+    //   e._v("\n            "+e._s(t.location)+"\n          ")
+    // ])
+    {
+      const signalLocationRenderRegex =
+        /([A-Za-z_$][\w$]*)\("span",\{staticClass:"city"\},\[\1\("i",\{staticClass:"dot"\}\),([A-Za-z_$][\w$]*)\._v\(("(?:(?:\\.|[^"\\])*)")\+\2\._s\(([A-Za-z_$][\w$]*)\.location\)\+("(?:(?:\\.|[^"\\])*)")\)\]\)/g;
+
+      text = text.replace(signalLocationRenderRegex, (match, h, vm, before, item, after) => {
+        changed++;
+        total++;
+
+        for (const mapping of textMappings.filter(m => m.patchSignalLocation)) {
+          log(`[${rel}] ${mapping.zh} -> ${mapping.ko}`);
+        }
+
+        return `${h}("span",{staticClass:"city"},[${h}("i",{staticClass:"dot"}),${vm}._v(${before}+${vm}._s((${signalLocationMapLiteral}[${item}.location]||${item}.location))+${after})])`;
+      });
+    }
+
+    // 블랙리스트 카운트 렌더링 패치
+    // 원본 예:
+    // e._v("\n                黑名单（"+e._s(e.blackList.length)+"/"+e._s(e.blackUpperLimit)+"）\n              ")
+    {
+      const blacklistCountMappings = textMappings.filter(m => m.patchBlacklistCountText);
+
+      for (const mapping of blacklistCountMappings) {
+        const zh = escapeRegExp(mapping.zh);
+        const ko = mapping.ko;
+
+        // "黑名单（" + ... 구조 패치
+        const re = new RegExp(
+          `(\\._v\\(\\s*)(["'\`])((?:(?:\\\\[nrt])|\\s)*)${zh}（\\2\\s*\\+`,
+          "g"
+        );
+
+        text = text.replace(re, (match, prefix, quote, before) => {
+          changed++;
+          total++;
+          log(`[${rel}] ${mapping.zh} -> ${mapping.ko}`);
+          return `${prefix}${quote}${before}${ko} (${quote}+`;
+        });
+
+        // 닫는 괄호 "）" -> ")"
+        // 예: +e._s(e.blackUpperLimit)+"）\n"
+        const closeRe = new RegExp(
+          `(blackUpperLimit\\)\\s*\\+\\s*)(["'\`])）`,
+          "g"
+        );
+
+        text = text.replace(closeRe, (match, prefix, quote) => {
+          return `${prefix}${quote})`;
+        });
+      }
     }
 
     if (changed > 0) {
@@ -408,8 +534,9 @@ function patchCustomerCenterDynamicText(files) {
 }
 
 // 문자열 전체가 정확히 일치할 때만 매핑
-function patchExactStringLiteral(files) {
+function patchStaticStringMappings(files) {
   const mappings = [
+    // 통합
     ["关闭", "닫기"],
     ["确认", "확인"],
     ["确定", "확인"],
@@ -420,9 +547,26 @@ function patchExactStringLiteral(files) {
     ["平台设置", "플랫폼 설정"],
     ["我的战绩", "내 전적"],
 
-    // 마우스를 갖다대면 나오는 글
-    ["正在匹配天梯赛", "매칭 중"],
-    ["正在进行天梯赛", "경기 진행 중"],
+    // 런처 실행 페이지
+    ["正在检测当前客户端版本...", "버전 확인 중..."],
+    ["正在检测steam登录", "Steam 로그인 확인 중..."],
+    ["点击头像登录", "프로필 로그인"],
+    ["其他方式登录", "다른 방법으로 로그인"],
+    ["登录中...", "로그인 중..."],
+    ["我已阅读并同意", "동의 항목:"],
+    ["用户协议", "이용약관"],
+    ["和", "및"],
+    ["个人信息保护政策", "개인정보처리방침"],
+
+    // 런처 상단 작업표시줄
+    ["确定切换账号吗？", "계정을 전환하시겠습니까?"],
+    ["消息中心", "알림 센터"],
+    ["收起", "접기"],
+    ["启动检测", "실행 환경 검사"],
+    ["检测结果", "검사 결과"],
+    ["您可以正常进行游戏", "정상적으로 게임을 진행할 수 있습니다"],
+    ["关 闭", "닫기"],
+    ["重新检测", "재검사"],
 
     // 메인 페이지
     ["Steam未登录", "Steam 로그인 필요"],
@@ -430,6 +574,11 @@ function patchExactStringLiteral(files) {
     ["前往查看详情>>", "자세히 보기>>"],
     ["系统检测您尚未登录Steam/蒸汽平台，请您开启并登录后重试", "Steam에 로그인되어 있지 않습니다. Steam을 실행하고 로그인한 뒤 다시 시도해 주세요."],
     ["完美战力未上榜", "완미 전투력 미랭크"],
+    ["账户", "계정"],
+    ["道具", "아이템"],
+    ["设置", "설정"],
+    ["正义", "제재"],
+    ["会员", "회원"],
     ["本周举报", "주간 신고"],
     ["已处理", "처리됨"],
     ["正义审核", "제재 심사"],
@@ -438,11 +587,40 @@ function patchExactStringLiteral(files) {
     ["昨日封禁", "어제의 제재"],
     ["PAC封禁", "PAC 제재"],
     ["其他封禁", "기타 제재"],
+    ["开启优先匹配可获得官匹掉落哦！", "우선 매칭으로 공식서버 보상 획득!"],
+
+    // 메인 상단 페이지
+    ["首页", "홈"],
+    ["排行榜", "랭킹"],
+    ["任务中心", "미션 센터"],
+
+    // 친구 탭
+    ["在线", "ONLINE"],
+    ["隐身", "OFFLINE"],
+    ["搜索我的好友（昵称/备注）", "내 친구 검색(닉네임/메모)"],
+    ["消息", "메시지"],
+    ["联系人", "친구 목록"],
+    ["我的好友", "내 친구"],
+    ["正在游戏", "게임 중"],
+    ["当前在线", "온라인"],
+    ["离线", "오프라인"],
+    ["黑名单", "차단 목록"],
 
     // 숙련도 페이지
-    ["老兵玩家", "베테랑"],
+    ["绿色玩家", "녹색 계정"],
+    ["绿色", "녹색"],
+    ["玩家", "계정"],
+    ["老兵玩家", "베테랑 계정"],
+    ["新手玩家", "신규 계정"],
     ["优秀", "우수"],
-    ["老兵", "베테랑"]
+    ["良好", "양호"],
+    ["风险观察", "관찰 대상"],
+    ["低优先", "낮은 우선순위"],
+    ["较差", "불량"],
+
+    // 마우스를 갖다대면 나오는 글
+    ["正在匹配天梯赛", "매칭 중"],
+    ["正在进行天梯赛", "경기 진행 중"]
 
   ];
 
@@ -530,11 +708,6 @@ function patchImageAssets() {
 
   const imageMappings = [
     {
-      from: path.join(assetsDir, "rabbit.8094b2dc.png"),
-      to: path.join(UNPACKED_DIR, "static", "img", "rabbit.8094b2dc.png"),
-      label: "rabbit.8094b2dc.png"
-    },
-    {
       from: path.join(assetsDir, "zl2026s1_1.d9ccaced.png"),
       to: path.join(UNPACKED_DIR, "static", "img", "zl2026s1_1.d9ccaced.png"),
       label: "zl2026s1_1.d9ccaced.png"
@@ -544,6 +717,18 @@ function patchImageAssets() {
       from: path.join(assetsDir, "justice.e15ebd35.png"),
       to: path.join(UNPACKED_DIR, "static", "img", "justice.e15ebd35.png"),
       label: "justice.e15ebd35.png"
+    },
+    // 메인 화면 공식서버 아이콘
+    {
+      from: path.join(assetsDir, "gf.ca1c9e7d.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "gf.ca1c9e7d.svg"),
+      label: "gf.ca1c9e7d.svg"
+    },
+    // 메인 화면 공식서버 아이콘 (클릭)
+    {
+      from: path.join(assetsDir, "gf-hover.8f4ccfe3.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "gf-hover.8f4ccfe3.svg"),
+      label: "gf-hover.8f4ccfe3.svg"
     },
     // 베테랑 아이콘
     {
@@ -586,10 +771,9 @@ function applyPatches() {
   log(`[info] target files: ${files.length}`);
 
   patchEnumMappings(files);
-  patchSafeFieldMappings(files); // 안전한 필드 번역
   patchVueTextContext(files); // Vue 렌더링 번역
   patchCustomerCenterDynamicText(files); // 서버/데이터에서 내려온 값을 출력 직전에 번역
-  patchExactStringLiteral(files); // 정확한 문자열 리터럴 번역
+  patchStaticStringMappings(files); // 정확한 문자열 리터럴 번역
   patchProfileVueTextContext(files); // 프로필 번역
   patchImageAssets(); // 이미지 리소스 교체
 }

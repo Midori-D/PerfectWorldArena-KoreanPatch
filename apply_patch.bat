@@ -1,8 +1,21 @@
 @echo off
+setlocal
+
+if defined WT_SESSION goto main
+
+where wt.exe >nul 2>&1
+if %errorlevel%==0 (
+  start "" wt.exe cmd /k "\"%~f0\""
+  exit /b
+)
+
+:main
 chcp 65001 >nul
 title Perfect World Arena Korean Patch
 
 cd /d "%~dp0"
+
+echo Running...
 
 net session >nul 2>&1
 if %errorlevel% neq 0 (
@@ -16,27 +29,34 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-Process | Where-Object { $_.MainWindowTitle -like '*完美世界竞技平台*' }; if ($p) { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Perfect World Arena가 실행 중입니다.`n패치 전 完美世界竞技平台을 완전히 종료해 주세요.', 'Perfect World Arena Korean Patch', 'OK', 'Warning') | Out-Null; exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName PresentationFramework; $targets = @(Get-Process | Where-Object { $_.MainWindowTitle -like '*完美世界竞技平台*' }); if ($targets.Count -gt 0) { $msg = 'Perfect World Arena가 실행 중입니다.' + [Environment]::NewLine + [Environment]::NewLine + '패치를 진행하려면 완미를 종료해야 합니다.' + [Environment]::NewLine + '지금 완미를 종료하고 패치를 계속할까요?'; $answer = [System.Windows.MessageBox]::Show($msg, 'Perfect World Arena Korean Patch', 'YesNo', 'Question'); if ($answer -ne 'Yes') { Write-Host '[info] User cancelled.'; exit 1 }; Write-Host '[info] Perfect World Arena process detected. Trying to close...'; $targets | ForEach-Object { Write-Host ('[info] PID=' + $_.Id + ' NAME=' + $_.ProcessName + ' TITLE=' + $_.MainWindowTitle); if ($_.MainWindowHandle -ne 0) { $null = $_.CloseMainWindow() } }; Start-Sleep -Seconds 3; $alive = @(); foreach ($p in $targets) { try { $alive += Get-Process -Id $p.Id -ErrorAction Stop } catch {} }; if ($alive.Count -gt 0) { Write-Host '[info] Force closing remaining Perfect World Arena process...'; $alive | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }; $alive2 = @(); foreach ($p in $targets) { try { $alive2 += Get-Process -Id $p.Id -ErrorAction Stop } catch {} }; if ($alive2.Count -gt 0) { [System.Windows.MessageBox]::Show('Perfect World Arena 프로세스를 종료하지 못했습니다.' + [Environment]::NewLine + '작업 관리자에서 完美世界竞技平台을 종료한 뒤 다시 실행해 주세요.', 'Perfect World Arena Korean Patch', 'OK', 'Warning') | Out-Null; exit 2 } else { Write-Host '[info] Perfect World Arena process closed.' } }"
 
 if %errorlevel% neq 0 (
   color 0C
   echo.
-  echo [error] Perfect World Arena가 실행 중입니다.
-  echo 패치 전 完美世界竞技平台을 완전히 종료해 주세요.
+  echo [error] Perfect World Arena 종료가 취소되었거나 실패했습니다.
+  echo 완미를 종료한 뒤 다시 실행해 주세요.
   echo.
   pause
   exit /b 1
 )
 
 cls
-if exist "%~dp0intro.txt" (
-  type "%~dp0intro.txt"
-) else (
-  echo ============================================================
-  echo   Perfect World Arena Korean Patch
-  echo   완미세계 경기 플랫폼 한국어 패치
-  echo ============================================================
-)
+set "PATCH_DIR=%~dp0"
+
+if not exist "%~dp0intro.txt" goto INTRO_FALLBACK
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$patchDir=$env:PATCH_DIR; $introPath=Join-Path $patchDir 'intro.txt'; $pathFile=Join-Path $patchDir 'pwa_path.txt'; $pwaPath='(pwa_path.txt에 설치 경로를 입력해 주세요)'; if (Test-Path $pathFile) { $line=Get-Content -Encoding UTF8 $pathFile | Where-Object { $v=$_.Trim(); $v -and -not $v.StartsWith('#') } | Select-Object -First 1; if ($line) { $pwaPath=$line.Trim(); if (($pwaPath.StartsWith([char]34) -and $pwaPath.EndsWith([char]34)) -or ($pwaPath.StartsWith([char]39) -and $pwaPath.EndsWith([char]39))) { $pwaPath=$pwaPath.Substring(1,$pwaPath.Length-2) } } }; if (Test-Path $introPath) { $intro=Get-Content -Raw -Encoding UTF8 $introPath; Write-Host ($intro.Replace('{{PWA_PATH}}',$pwaPath)) } else { Write-Host 'intro.txt를 찾을 수 없습니다.' }"
+
+goto INTRO_DONE
+
+:INTRO_FALLBACK
+echo ============================================================
+echo   Perfect World Arena Korean Patch
+echo   완미세계 경기 플랫폼 한국어 패치
+echo ============================================================
+
+:INTRO_DONE
 echo(
 powershell -NoProfile -Command "Write-Host 'Created by Midori, Team Ataks' -ForegroundColor Magenta"
 echo(

@@ -5,13 +5,17 @@ const PATCHER_DIR = __dirname;
 const LOCAL_NODE_DIR = path.join(PATCHER_DIR, "tools", "node-v26.2.0-win-x64");
 const LOCAL_ASAR_PATH = path.join(LOCAL_NODE_DIR, "node_modules", "asar");
 
+const DEBUG_MODE = process.argv.includes("--debug");
+const {
+  debugCheckPatchMappings,
+  createStaticMappingDebugSession
+} = require("./patcher_debug.js");
+
 let asar;
 try {
   asar = require(LOCAL_ASAR_PATH);
 } catch (err) {
   console.error("[error] asar 모듈을 찾을 수 없습니다.");
-  console.error("[error] 아래 명령어를 먼저 실행해 주세요:");
-  console.error(`"${path.join(LOCAL_NODE_DIR, "npm.cmd")}" install asar --prefix "${LOCAL_NODE_DIR}"`);
   throw err;
 }
 
@@ -61,7 +65,7 @@ const RESOURCES_DIR = path.join(INSTALL_DIR, "resources");
 const APP_ASAR = path.join(RESOURCES_DIR, "app.asar");
 const APP_ASAR_UNPACKED = path.join(RESOURCES_DIR, "app.asar.unpacked");
 
-const WORK_DIR = path.join(process.env.USERPROFILE || process.cwd(), "Desktop", "pwa_korean_patch_work");
+const WORK_DIR = path.join(PATCHER_DIR, ".work");
 const UNPACKED_DIR = path.join(WORK_DIR, "app_unpacked");
 const PATCHED_ASAR = path.join(WORK_DIR, "app.patched.asar");
 const LOG_DIR = path.join(WORK_DIR, "logs");
@@ -72,11 +76,7 @@ const nowTag = new Date()
   .replace("T", "_")
   .slice(0, 19);
 
-const BACKUP_ASAR = path.join(
-  RESOURCES_DIR,
-  `app.asar.koreanpatch_backup_${nowTag}`
-);
-
+const BACKUP_ASAR = path.join(RESOURCES_DIR, "app.asar.backup");
 const LOG_PATH = path.join(LOG_DIR, `patch_log_${nowTag}.txt`);
 const REMAIN_PATH = path.join(LOG_DIR, `remaining_log_${nowTag}.txt`);
 
@@ -110,7 +110,6 @@ function checkEnvironment() {
 
   if (!fs.existsSync(APP_ASAR_UNPACKED)) {
     log(`[warn] app.asar.unpacked not found: ${APP_ASAR_UNPACKED}`);
-    log("[warn] 앱에 따라 필요 없을 수도 있지만, 완미는 보통 app.asar.unpacked도 함께 있어야 합니다.");
   }
 
   if (!asar) {
@@ -131,9 +130,65 @@ function prepareWorkDir() {
   }
 }
 
-function backupOriginal() {
-  fs.copyFileSync(APP_ASAR, BACKUP_ASAR);
-  log(`[backup] ${APP_ASAR} -> ${BACKUP_ASAR}`);
+function cleanupOldBackupFiles() {
+  const backupDirs = [
+    RESOURCES_DIR,
+    WORK_DIR
+  ].filter(Boolean).filter(dir => fs.existsSync(dir));
+
+  const backupPatterns = [
+  /^app\.asar\.backup$/i,
+  /^app\.asar\.koreanpatch_backup_.+$/i
+  ];
+
+  let deleted = 0;
+
+  for (const dir of backupDirs) {
+    let names;
+
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+
+    for (const name of names) {
+      if (name === "app.asar") continue;
+      if (name === "app.asar.unpacked") continue;
+      if (name === "app.asar.patched") continue;
+
+      const isBackup = backupPatterns.some(re => re.test(name));
+      if (!isBackup) continue;
+
+      const full = path.join(dir, name);
+
+      try {
+        const stat = fs.statSync(full);
+
+        if (!stat.isFile()) continue;
+
+        fs.unlinkSync(full);
+        deleted++;
+
+        log(`[backup-cleanup] deleted: ${full}`);
+      } catch (err) {
+        log(`[backup-cleanup] failed: ${full}`);
+        log(`[backup-cleanup] reason: ${err.message}`);
+      }
+    }
+  }
+
+  log(`[summary:backup-cleanup] deleted=${deleted}`);
+}
+
+function backupOriginalAsar() {
+  cleanupOldBackupFiles();
+
+  const backupPath = path.join(RESOURCES_DIR, "app.asar.backup");
+
+  fs.copyFileSync(APP_ASAR, backupPath);
+
+  log(`[backup] created: ${backupPath}`);
 }
 
 function extractAsar() {
@@ -193,6 +248,39 @@ function readText(full) {
 
 function writeText(full, text) {
   fs.writeFileSync(full, text, "utf8");
+}
+
+function collectFiles(dir) {
+  const result = [];
+
+  function walk(currentDir) {
+    if (!fs.existsSync(currentDir)) return;
+
+    const names = fs.readdirSync(currentDir);
+
+    for (const name of names) {
+      const full = path.join(currentDir, name);
+
+      let stat;
+      try {
+        stat = fs.statSync(full);
+      } catch {
+        continue;
+      }
+
+      if (stat.isDirectory()) {
+        walk(full);
+        continue;
+      }
+
+      if (!stat.isFile()) continue;
+
+      result.push(full);
+    }
+  }
+
+  walk(dir);
+  return result;
 }
 
 function escapeRegExp(s) {
@@ -313,8 +401,8 @@ const VUE_TEXT_MAPPINGS = [
   { type: "text", zh: "当前身份:", ko: "현재 신분:", patchTrimmedLiteral: true },
   { type: "text", zh: "信誉等级:", ko: "신뢰 등급:", patchTrimmedLiteral: true },
   { type: "text", zh: "完美助手", ko: "완미 도우미", patchPanelTitle: true },
-  { type: "text", zh: "练枪服", ko: "연습 서버", patchPanelTitle: true },
-  { type: "text", zh: "明星时刻", ko: "프로의 품격", patchPanelTitle: true },
+  { type: "text", zh: "练枪模式", ko: "에임 연습", patchPanelTitle: true },
+  { type: "text", zh: "狙击挑战", ko: "저격 첼린지", patchPanelTitle: true },
 
   // 닫기 창
   { type: "text", zh: "随时查战绩、看回放", ko: "전적 확인·다시보기", patchTrimmedLiteral: true },
@@ -337,7 +425,7 @@ const VUE_TEXT_MAPPINGS = [
   { type: "text", zh: "远古遗迹", ko: "고대", patchGameMapName: true },
   { type: "text", zh: "阿努比斯", ko: "아누비스", patchGameMapName: true },
   { type: "text", zh: "殒命大厦", ko: "버티고", patchGameMapName: true },
-  { type: "text", zh: "死亡游乐园", ko: "오버패스", patchGameMapName: true },
+  { type: "text", zh: "死亡游乐园", ko: "고가도로", patchGameMapName: true },
   { type: "text", zh: "死城之谜", ko: "무기창고", patchGameMapName: true },
   { type: "text", zh: "列车停放站", ko: "열차", patchGameMapName: true },
 
@@ -358,7 +446,8 @@ const VUE_TEXT_MAPPINGS = [
   { type: "text", zh: "天梯搭档", ko: "랭크 듀오", patchPlayTitleExpression: true },
   { type: "text", zh: "检测到本设备当前CFG配置信息未完成云备份", ko: "현재 기기의 CFG 설정이 클라우드에 백업되지 않았습니다.", patchTrimmedLiteral: true },
   { type: "text", zh: "招募列表", ko: "모집 목록", patchTrimmedLiteral: true },
-  { type: "text", zh: "收起", ko: "접기", patchTrimmedLiteral: true }
+  { type: "text", zh: "收起", ko: "접기", patchTrimmedLiteral: true },
+  { type: "text", zh: "勾选绝对绿色需要更多匹配时长", ko: "녹색 전용 시 매칭이 지연될 수 있습니다.", patchTrimmedLiteral: true }
 ];
 
 // Vue text patch helpers
@@ -594,6 +683,7 @@ function vuePatchPlayTitleExpression(state, textMappings) {
   });
 }
 
+// PatchGameMapName
 function vuePatchGameMapName(state, textMappings) {
   const gameMapMappings = textMappings.filter(m => m.patchGameMapName);
   if (gameMapMappings.length === 0) return;
@@ -657,7 +747,41 @@ function vuePatchGameMapName(state, textMappings) {
   });
 }
 
-// 숫자+回合胜利 패치
+// vuePatchRelativeTimeText, 친구 추가 탭의 ~분전 패치
+function vuePatchRelativeTimeText(state) {
+  if (
+    !state.text.includes(".timeLine(") ||
+    !state.text.includes("$style.stTime")
+  ) {
+    return;
+  }
+
+  const helper =
+    `(function(v){` +
+    `v=String(v==null?"":v).trim();` +
+    `return v` +
+    `.replace(/^(\\d+)天前$/,"$1일 전")` +
+    `.replace(/^(\\d+)分钟前$/,"$1분 전")` +
+    `.replace(/^(\\d+)小时前$/,"$1시간 전")` +
+    `.replace(/^刚刚$/,"방금 전");` +
+    `})`;
+
+  const re =
+    /([A-Za-z_$][\w$]*)\._s\(\1\.timeLine\(([^()]+?)\)\)/g;
+
+  state.text = state.text.replace(re, (match, vm, arg) => {
+    if (match.includes("function(v)")) return match;
+
+    state.changed++;
+    state.total++;
+
+    log(`[${state.rel}] 친구 추가 탭 시간 텍스트 패치 완료`);
+
+    return `${vm}._s(${helper}(${vm}.timeLine(${arg})))`;
+  });
+}
+
+// vuePatchRoundWinText, 매치 탭 ~라운드 승리 패치 - 검토 필요!!
 function vuePatchRoundWinText(state) {
   const roundWinTextRegex =
     /(\._v\(\s*)(["'`])((?:(?:\\[nrt])|\s)*)(\d+)回合胜利((?:(?:\\[nrt])|\s)*)\2(\s*\))/g;
@@ -670,7 +794,7 @@ function vuePatchRoundWinText(state) {
   });
 }
 
-// ===== Main Vue text patcher =====
+// Main Vue text patcher
 
 function patchVueTextContext(files) {
   const contextMappings = VUE_TEXT_MAPPINGS.filter(m => m.type === "context");
@@ -703,6 +827,7 @@ function patchVueTextContext(files) {
     vuePatchPlayLinkTitleRender(state, textMappings);
     vuePatchPlayTitleExpression(state, textMappings);
     vuePatchGameMapName(state, textMappings);
+    vuePatchRelativeTimeText(state);
     vuePatchRoundWinText(state);
     if (state.changed > 0) {
       writeText(full, state.text);
@@ -713,12 +838,12 @@ function patchVueTextContext(files) {
   log(`[summary:vue-text-context] changed=${total}`);
 }
 
-// 서버/캐시 데이터로 들어오는 문구를 화면 출력 직전에 한국어로 매핑
+// patchCustomerCenterDynamicText
 function patchCustomerCenterDynamicText(files) {
   const dynamicRules = [
     {
       name: "customer-center-entry-title",
-      expression: "e.categoryInfo.entryTitle",
+      objectPath: "categoryInfo.entryTitle",
       mappings: [
         ["游戏启动慢如何解决?", "게임 실행이 느릴 때 어떻게 하나요?"],
         ["游戏启动慢如何解决？", "게임 실행이 느릴 때 어떻게 하나요?"]
@@ -726,9 +851,9 @@ function patchCustomerCenterDynamicText(files) {
     },
     {
       name: "customer-center-propaganda-title",
-      expression: "e.categoryInfo.propagandaTitle",
+      objectPath: "categoryInfo.propagandaTitle",
       mappings: [
-        ["兔管答疑", "토끼상담"]
+        ["兔管答疑", "토끼 상담"]
       ]
     }
   ];
@@ -761,23 +886,31 @@ function patchCustomerCenterDynamicText(files) {
     let changed = 0;
 
     for (const rule of dynamicRules) {
-      const from = `e._s(${rule.expression})`;
       const mapLiteral = makeMapLiteral(rule.mappings);
-      const to = `e._s((${mapLiteral}[${rule.expression}]||${rule.expression}))`;
+      const pathRe = rule.objectPath.replace(/\./g, "\\.");
 
-      if (!text.includes(from)) continue;
+      // 예:
+      // e._s(e.categoryInfo.entryTitle)
+      // t._s(t.categoryInfo.entryTitle)
+      // n._s(n.categoryInfo.propagandaTitle)
+      //
+      // 앞 변수명과 뒤 변수명이 같은 경우만 잡음
+      const re = new RegExp(
+        `([A-Za-z_$][\\w$]*)\\._s\\(\\1\\.${pathRe}\\)`,
+        "g"
+      );
 
-      const count = text.split(from).length - 1;
-      text = text.split(from).join(to);
-
-      for (let i = 0; i < count; i++) {
+      text = text.replace(re, (match, vm) => {
         changed++;
         total++;
 
         for (const [zh, ko] of rule.mappings) {
           log(`[${rel}] ${zh} -> ${ko}`);
         }
-      }
+
+        const expr = `${vm}.${rule.objectPath}`;
+        return `${vm}._s((${mapLiteral}[${expr}]||${expr}))`;
+      });
     }
 
     if (changed > 0) {
@@ -797,15 +930,23 @@ function patchStaticStringMappings(files) {
     ["确定", "확인"],
     ["取消", "취소"],
     ["继续", "계속"],
+    ["加载中...", "로딩 중..."],
     ["比赛结束", "경기 종료"],
     ["个人主页", "개인 페이지"],
     ["平台设置", "플랫폼 설정"],
     ["我的战绩", "내 전적"],
-    [", 进入将会离开当前房间", ", 입장하면 현재 방에서 나가게 됩니다"],
+    [", 进入将会离开当前房间", ", 입장하면 현재 방에서 나가게 됩니다."],
 
     // 런처 실행 페이지
     ["正在检测当前客户端版本...", "버전 확인 중... with Ataks, Midori"],
+    ["当前为最新版本，正在启动...", "현재 최신 버전입니다. 실행 중..."],
     ["检测到新版本，正在更新...", "새 버전 감지, 업데이트 중..."],
+    ["更新失败！", "업데이트에 실패했습니다!"],
+    ["更新异常，请检查网络连接", "업데이트 중 문제가 발생했습니다. 네트워크 연결을 확인해 주세요."],
+    ["安装重启中...", "설치 후 재시작 중..."],
+    ["正在应用更新...", "업데이트 적용 중..."],
+    ["检测到CS客户端正在运行，请关闭游戏后再进行更新！", "CS2 클라이언트가 실행 중입니다. 게임을 종료한 후 다시 업데이트해 주세요!"],
+
     ["正在检测steam登录", "Steam 로그인 확인 중..."],
     ["点击头像登录", "프로필 로그인"],
     ["其他方式登录", "다른 방법으로 로그인"],
@@ -850,7 +991,7 @@ function patchStaticStringMappings(files) {
     ["设置", "설정"],
     ["正义", "제재"],
     ["会员", "회원"],
-    ["处理中", "처리 중"], // PAC 페이지에 영향
+    ["处理中", "처리 중"], // PAC 페이지 영향
     ["今日封禁", "오늘의 신고"],
     ["本周举报", "주간 신고"],
     ["已处理", "처리됨"],
@@ -864,7 +1005,7 @@ function patchStaticStringMappings(files) {
 
     // 메인 상단 페이지
     ["首页", "홈"],
-    ["排行榜", "랭킹"], // TOP LEAGUE의 상단 랭킹 탭도 영향
+    ["排行榜", "랭킹"], // TOP LEAGUE의 상단 랭킹 탭 영향
     ["任务中心", "미션 센터"],
 
     // 친구 탭
@@ -874,16 +1015,17 @@ function patchStaticStringMappings(files) {
     ["消息", "메시지"],
     ["联系人", "친구 목록"],
     ["我的好友", "내 친구"],
+    ["我的公会", "내 길드"],
     ["正在游戏", "게임 중"],
     ["当前在线", "온라인"],
     ["离线", "오프라인"],
     ["黑名单", "차단 목록"],
-
-    // 친구 탭 우클릭
     ["天梯模式", "랭크 매치"],
     ["练枪模式", "연습 매치"],
+
+    // 친구 탭 우클릭
     ["发送消息", "메시지 보내기"],
-    ["查看资料", "프로필 보기"],
+    ["查看资料", "프로필 보기"], // 매칭 창 우클릭에 영향
     ["修改备注", "메모 수정"],
     ["删除好友", "친구 삭제"],
     ["拉黑好友", "친구 차단"],
@@ -891,6 +1033,15 @@ function patchStaticStringMappings(files) {
     ["邀请房间", "방 초대하기"],
     ["加入房间", "방 참가"],
     ["加入游戏", "게임 참가"],
+
+    // 친구 탭 추가창
+    ["好友申请", "친구 신청"],
+    ["已添加", "친구 추가됨"],
+    ["已忽略", "무시됨"],
+    ["请输入steam ID或者昵称", "Steam ID 또는 닉네임을 입력해 주세요."],
+    ["搜索", "검색"],
+    ["您可以输入Steam昵称（全匹配搜索），Steam32位ID，Steam64位ID来查找玩家", "Steam 닉네임(완전 일치), Steam32 ID, Steam64 ID로 플레이어를 찾을 수 있습니다."],
+    ["添加", "추가"],
 
     // 플레이 페이지 통합
     ["房间号：", "방 번호:"],
@@ -915,14 +1066,23 @@ function patchStaticStringMappings(files) {
     ["未获得", "미획득"],
     ["快速练枪", "에임연습"],
     ["绝对单排", "솔로 전용"],
-    ["绝对绿色", "녹계 전용"],
+    ["绝对绿色", "녹색 전용"],
     ["开始匹配", "매치 시작"],
+    ["绿色认证匹配", "녹색 인증 매칭"],
     ["赛前准备", "매치 준비"],
+    ["寻找比赛...", "매치 찾는 중..."],
+
+    // 플레이 페이지 우클릭
+    ["踢出房间", "방 내보내기"],
+    ["添加好友", "친구 추가"],
+    ["申请战队", "팀 가입 신청"],
+    ["移交房主", "방장 위임"],
+    ["申请公会", "길드 신청"],
 
     // 녹색 인증 페이지
     ["绿色玩家", "녹색 계정"],
     ["绿色", "녹색"],
-    ["玩家", "계정"], // 방 입장 자동채팅도 영향
+    ["玩家", "계정"], // 방 입장 자동채팅 영향
     ["老兵玩家", "베테랑 계정"],
     ["新手玩家", "신규 계정"],
     ["优秀", "우수"],
@@ -977,40 +1137,66 @@ function patchStaticStringMappings(files) {
     ["擅长沟通", "소통왕"],
     ["暂未加入公会", "가입한 길드 없음"],
 
-    // 알람 창
+    // 팝업 창
     ["获取地图列表失败", "지도 목록을 불러오지 못했습니다."],
     ["重试", "다시 시도"],
     ["当前登陆的Steam账号与平台账号不一致，请更换登录账号后再重试", "Steam 계정이 플랫폼 계정과 일치하지 않습니다. 계정을 변경한 후 다시 시도해 주세요."],
     ["当前Steam/蒸汽平台登录账号与平台绑定账号不一致", "Steam 계정이 플랫폼에 연동된 계정과 일치하지 않습니다."],
     ["您正在军团战争中, 进入将会离开当前房间", "현재 클랜전 중입니다. 입장하면 현재 방에서 나가게 됩니다."],
 
-    // 상단 중앙 빨간색 글 알림 창
+    // 상단 중앙 빨간색 글 알림 창 - 통합
     ["请求失败", "요청 실패"],
-    ["成功", "처리 완료"],
     ["获取本周举报信息失败", "신고 내역 불러오기 실패"],
     ["获取比赛状态超时", "매치 상태 확인 시간 초과"],
     ["请勿重复点击", "중복 클릭하지 마세요."],
     ["当前账号与steam账号不匹配！", "현재 계정과 Steam 계정이 일치하지 않습니다!"],
     ["请先登录steam/蒸汽平台", "먼저 Steam 계정에 로그인해 주세요."],
-    ["观战体验次数已用完哦~成为大会员将刷新次数", "관전 체험 횟수를 모두 사용했습니다~ 회원이 되면 횟수가 갱신됩니다."], // 친구 창
-    ["只有房间内全部为绿色认证玩家且信誉等级优秀才可选择", "방 안의 모든 플레이어가 녹색 계정이며 신뢰 등급이 우수해야 설정할 수 있습니다."], // 이하 플레이 창
-    ["只有房主才能开始匹配", "방장만 매칭을 시작할 수 있습니다."],
+    ["观战体验次数已用完哦~成为大会员将刷新次数", "관전 체험 횟수를 모두 사용했습니다~ 회원이 되면 횟수가 갱신됩니다."],
+
+    // 상단 중앙 빨간색 글 알림 창 - 플레이 창
+    ["只有房间内全部为绿色认证玩家且信誉等级优秀才可选择", "방 안의 모든 플레이어가 녹색 계정이며 신뢰 등급이 우수해야 설정할 수 있습니다."],
+    ["只有房主才能开始匹配！", "방장만 매칭을 시작할 수 있습니다!"],
     ["匹配中无法设置！", "매칭 중에는 설정할 수 없습니다!"],
     ["正在匹配中", "매칭 중"],
     ["匹配中无法修改地图！", "매칭 중에는 맵을 변경할 수 없습니다!"],
     ["匹配中无法修改大区！", "매칭 중에는 지역을 변경할 수 없습니다!"],
     ["匹配中无法切换房间！", "매칭 중에는 방을 변경할 수 없습니다!"],
     ["检测到您本地没有对应游戏地图", "로컬에 해당 게임 맵이 없습니다."],
-    ["版本维护，暂无法跳转", "버전 점검 중이라 이동할 수 없습니다."],
     ["无法进入天梯", "랭크 방에 입장할 수 없습니다."], 
+
+    ["成功", "처리 완료"], // 이하 34a3e08f.js (매치 방)
     ["没有足够的房间", "방이 부족합니다."],
     ["无效的请求参数", "잘못된 요청입니다."],
     ["不是队长", "방장이 아닙니다."],
-    ["无效的请求", "잘못된 요청입니다."],
+    ["队伍已存在", "방이 이미 존재합니다"],
     ["玩家已经在匹配池或者在组队中", "플레이어가 이미 매칭 대기열 또는 파티에 있습니다."],
+    ["只有队长才能操作", "방장만 조작할 수 있습니다."],
+    ["无效的请求", "잘못된 요청입니다."],
+    ["玩家已存在", "이미 존재하는 플레이어입니다."],
+    ["队伍不存在", "방이 존재하지 않습니다."],
+    ["服务器网络错误", "서버 네트워크 오류"],
+    ["无效的参数", "잘못된 매개변수"],
+    ["房间不存在", "방이 존재하지 않습니다."],
+    ["房间已锁定", "방이 잠겨 있습니다."],
+    ["好友已设置屏蔽房间邀请", "친구가 방 초대 차단을 설정했습니다."],
+    ["消息过期", "메시지가 만료되었습니다."],
+    ["邀请失败", "초대 실패"],
+    ["邀请错误！对方正在游戏中", "초대 실패! 상대가 게임 중입니다."],
+    ["匹配中无法邀请好友", "매칭 중에는 친구를 초대할 수 없습니다."],
+    ["该模式正在维护中", "해당 모드는 점검 중입니다."],
+    ["服务器逻辑错误", "서버 처리 오류"],
+    ["玩家被冷却", "플레이어가 쿨다운 상태입니다."],
+    ["玩家被vac或者ow封禁", "플레이어가 VAC 또는 OW 차단 상태입니다."],
+    ["没有空闲房间", "빈 방이 없습니다."],
+    ["房间已满", "방이 가득 찼습니다."],
+    ["正在创建房间中，请勿重复操作", "방 생성 중입니다. 중복 조작하지 마세요."],
+    ["敬请期待", "곧 공개 예정"],
+    ["链接错误", "연결 오류"],
+    ["版本维护，暂无法跳转", "버전 점검 중이라 이동할 수 없습니다."],
+    ["至少保留1个地区", "지역을 최소 1개 이상 선택해 주세요"],
 
     // 상단 중앙 초록색 글 알림 창
-    ["复制成功，快去邀请好友吧", "복사 완료! 친구를 초대해 보세요."],
+    ["复制成功，快去邀请好友吧", "복사 완료! 친구를 초대해 보세요."], // 34a3e08f.js (친구 탭)
 
     // 매치 결과 창
     ["顶级突破手", "엔트리왕"],
@@ -1032,11 +1218,20 @@ function patchStaticStringMappings(files) {
     ["远古遗迹", "고대"],
     ["阿努比斯", "아누비스"],
     ["殒命大厦", "버티고"],
-    ["死亡游乐园", "오버패스"],
+    ["死亡游乐园", "고가도로"],
     ["死城之谜", "무기창고"],
     ["列车停放站", "열차"]  // 어디가 바뀐지 모르겠음 확인 필요
 
   ];
+
+  const staticDebug = createStaticMappingDebugSession({
+    enabled: DEBUG_MODE,
+    mappings,
+    patcherDir: PATCHER_DIR,
+    unpackedDir: UNPACKED_DIR,
+    readText,
+    log
+  });
 
   let total = 0;
 
@@ -1052,7 +1247,8 @@ function patchStaticStringMappings(files) {
 
     let changed = 0;
 
-    for (const [zh, ko] of mappings) {
+    for (let i = 0; i < mappings.length; i++) {
+      const [zh, ko] = mappings[i];
       const z = escapeRegExp(zh);
 
       const re = new RegExp(`(["'\`])${z}\\1`, "g");
@@ -1060,6 +1256,9 @@ function patchStaticStringMappings(files) {
       text = text.replace(re, (match, quote) => {
         changed++;
         total++;
+
+        staticDebug.record(rel, i, 1);
+
         log(`[${rel}] ${zh} -> ${ko}`);
         return `${quote}${ko}${quote}`;
       });
@@ -1071,6 +1270,7 @@ function patchStaticStringMappings(files) {
   }
 
   log(`[summary:exact-string-literal] changed=${total}`);
+  staticDebug.finish(files);
 }
 
 // Base64로 인코딩된 이미지 패치
@@ -1184,6 +1384,18 @@ function patchImageAssets() {
       to: path.join(UNPACKED_DIR, "static", "img", "gf-hover.8f4ccfe3.svg"),
       label: "gf-hover.8f4ccfe3.svg"
     },
+    // 녹색 아이콘
+    {
+      from: path.join(assetsDir, "green6.db86ef26.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "green6.db86ef26.svg"),
+      label: "green6.db86ef26.svg"
+    },
+    // 녹색 아이콘 2
+    {
+      from: path.join(assetsDir, "green6.h.19933a7a.svg"),
+      to: path.join(UNPACKED_DIR, "static", "img", "green6.h.19933a7a.svg"),
+      label: "green6.h.19933a7a.svg"
+    },
     // 베테랑 아이콘
     {
       from: path.join(assetsDir, "green7.286d29d5.svg"),
@@ -1221,15 +1433,25 @@ function patchImageAssets() {
 }
 
 function applyPatches() {
-  const files = walk(UNPACKED_DIR);
-  log(`[info] target files: ${files.length}`);
+  const files = collectFiles(UNPACKED_DIR);
 
   patchEnumMappings(files);
-  patchVueTextContext(files); // Vue 렌더링 번역
-  patchCustomerCenterDynamicText(files); // 서버/데이터에서 내려온 값을 출력 직전에 번역
+  patchVueTextContext(files);
+  patchCustomerCenterDynamicText(files);
   patchStaticStringMappings(files);
   patchInlineBase64Images(files);
   patchImageAssets();
+
+  debugCheckPatchMappings(files, {
+    enabled: DEBUG_MODE,
+    patcherDir: PATCHER_DIR,
+    unpackedDir: UNPACKED_DIR,
+    readText,
+    log,
+    mappingGroups: [
+      { source: "VUE_TEXT_MAPPINGS", mappings: VUE_TEXT_MAPPINGS }
+    ]
+  });
 }
 
 function saveLogs() {
@@ -1249,7 +1471,7 @@ async function main() {
   try {
     checkEnvironment();
     prepareWorkDir();
-    backupOriginal();
+    backupOriginalAsar();
     extractAsar();
     applyPatches();
     await packAsar();
@@ -1262,7 +1484,7 @@ async function main() {
     console.error("");
     console.error("[error]", err.message);
     console.error("");
-    console.error("복구하려면 아래 백업 파일을 app.asar로 되돌리세요:");
+    console.error("이 오류를 발견하셨다면 Midori 개발자에게 제보해 주세요!");
     console.error(BACKUP_ASAR);
     process.exit(1);
   }

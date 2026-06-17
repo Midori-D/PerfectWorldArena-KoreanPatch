@@ -44,9 +44,9 @@ if %errorlevel% neq 0 (
 cls
 set "PATCH_DIR=%~dp0"
 
-if not exist "%~dp0intro.txt" goto INTRO_FALLBACK
+if not exist "%~dp0pwa_intro.txt" goto INTRO_FALLBACK
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$patchDir=$env:PATCH_DIR; $introPath=Join-Path $patchDir 'intro.txt'; $pathFile=Join-Path $patchDir 'pwa_path.txt'; $pwaPath='(pwa_path.txt에 설치 경로를 입력해 주세요)'; if (Test-Path $pathFile) { $line=Get-Content -Encoding UTF8 $pathFile | Where-Object { $v=$_.Trim(); $v -and -not $v.StartsWith('#') } | Select-Object -First 1; if ($line) { $pwaPath=$line.Trim(); if (($pwaPath.StartsWith([char]34) -and $pwaPath.EndsWith([char]34)) -or ($pwaPath.StartsWith([char]39) -and $pwaPath.EndsWith([char]39))) { $pwaPath=$pwaPath.Substring(1,$pwaPath.Length-2) } } }; if (Test-Path $introPath) { $intro=Get-Content -Raw -Encoding UTF8 $introPath; Write-Host ($intro.Replace('{{PWA_PATH}}',$pwaPath)) } else { Write-Host 'intro.txt를 찾을 수 없습니다.' }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$patchDir=$env:PATCH_DIR; $introPath=Join-Path $patchDir 'pwa_intro.txt'; $pathFile=Join-Path $patchDir 'pwa_path.txt'; $pwaPath='(pwa_path.txt에 설치 경로를 입력해 주세요)'; if (Test-Path $pathFile) { $line=Get-Content -Encoding UTF8 $pathFile | Where-Object { $v=$_.Trim(); $v -and -not $v.StartsWith('#') } | Select-Object -First 1; if ($line) { $pwaPath=$line.Trim(); if (($pwaPath.StartsWith([char]34) -and $pwaPath.EndsWith([char]34)) -or ($pwaPath.StartsWith([char]39) -and $pwaPath.EndsWith([char]39))) { $pwaPath=$pwaPath.Substring(1,$pwaPath.Length-2) } } }; if (Test-Path $introPath) { $intro=Get-Content -Raw -Encoding UTF8 $introPath; Write-Host ($intro.Replace('{{PWA_PATH}}',$pwaPath)) } else { Write-Host 'pwa_intro.txt를 찾을 수 없습니다.' }"
 
 goto INTRO_DONE
 

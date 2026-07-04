@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "mappingVersion": "2026.07.04.1",
+  "minimumPatcherVersion": "1.0.0",
+  "latestPatcherVersion": "1.0.0",
+  "message": "번역 데이터가 최신 상태입니다.",
+  "files": {
+    "static": {
+      "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/static.json",
+      "path": "mappings/static.json"
+    },
+    "vue": {
+      "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/vue.json",
+      "path": "mappings/vue.json"
+    }
+  }
+}

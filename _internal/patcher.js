@@ -317,62 +317,25 @@ function makeFieldRegex(field, zh) {
   );
 }
 
-// 왼쪽 탭 패치
-function patchEnumMappings(files) {
-  const mappings = [
-    { key: "HomePage", zh: "首页", ko: "홈" },
-    { key: "CsgoRoom", zh: "玩", ko: "플레이" },
-    { key: "ReturnRoom", zh: "返回房间", ko: "방 복귀" },
-    { key: "CupPage", zh: "赛事", ko: "대회" },
-    { key: "PersonalPage", zh: "数据", ko: "전적" },
-    { key: "CommunityPage", zh: "创意工坊", ko: "창작마당" },
-    { key: "GroupCommunity", zh: "社交", ko: "소셜" },
-    { key: "SocialPage", zh: "大厅", ko: "로비" },
-    { key: "JusticePage", zh: "正义大厅", ko: "제재 센터" },
-    { key: "Justice", zh: "正义", ko: "제재" },
-    { key: "ActivityPage", zh: "活动", ko: "이벤트" },
-
-    { key: "TeamPage", zh: "战队", ko: "팀" },
-    { key: "AssistPage", zh: "小助手", ko: "도우미" },
-    { key: "Shop", zh: "商城", ko: "상점" },
-    { key: "Guild", zh: "公会", ko: "길드" },
-    { key: "Im", zh: "聊天", ko: "채팅" }
-  ];
-
-  let total = 0;
-
-  for (const full of files) {
-    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
-
-    let text;
-    try {
-      text = readText(full);
-    } catch {
-      continue;
-    }
-
-    let changed = 0;
-
-    for (const { key, zh, ko } of mappings) {
-      for (const re of [makeEnumRegex(key, zh), makeDirectKeyRegex(key, zh)]) {
-        text = text.replace(re, (match, prefix, quote) => {
-          changed++;
-          total++;
-          log(`[${rel}] ${zh} -> ${ko}`);
-          return `${prefix}${quote}${ko}${quote}`;
-        });
-      }
-    }
-
-    if (changed > 0) {
-      writeText(full, text);
-    }
-  }
-
-  log(`[summary:enum-mappings] changed=${total}`);
-}
-
 const VUE_TEXT_MAPPINGS = [
+  // 왼쪽 탭 페이지
+  { type: "enum", key: "HomePage", zh: "首页", ko: "홈", patchEnumMapping: true },
+  { type: "enum", key: "CsgoRoom", zh: "玩", ko: "플레이", patchEnumMapping: true },
+  { type: "enum", key: "ReturnRoom", zh: "返回房间", ko: "방 복귀", patchEnumMapping: true },
+  { type: "enum", key: "CupPage", zh: "赛事", ko: "대회", patchEnumMapping: true },
+  { type: "enum", key: "PersonalPage", zh: "数据", ko: "전적", patchEnumMapping: true },
+  { type: "enum", key: "CommunityPage", zh: "创意工坊", ko: "창작마당", patchEnumMapping: true },
+  { type: "enum", key: "GroupCommunity", zh: "社交", ko: "소셜", patchEnumMapping: true },
+  { type: "enum", key: "SocialPage", zh: "大厅", ko: "로비", patchEnumMapping: true },
+  { type: "enum", key: "JusticePage", zh: "正义大厅", ko: "제재 센터", patchEnumMapping: true },
+  { type: "enum", key: "Justice", zh: "正义", ko: "제재", patchEnumMapping: true },
+  { type: "enum", key: "ActivityPage", zh: "活动", ko: "이벤트", patchEnumMapping: true },
+  { type: "enum", key: "TeamPage", zh: "战队", ko: "팀", patchEnumMapping: true },
+  { type: "enum", key: "AssistPage", zh: "小助手", ko: "도우미", patchEnumMapping: true },
+  { type: "enum", key: "Shop", zh: "商城", ko: "상점", patchEnumMapping: true },
+  { type: "enum", key: "Guild", zh: "公会", ko: "길드", patchEnumMapping: true },
+  { type: "enum", key: "Im", zh: "聊天", ko: "채팅", patchEnumMapping: true },
+
   // 런처 실행 페이지
   { type: "text", zh: "扫码登录", ko: "QR 로그인", patchTrimmedLiteral: true },
   { type: "text", zh: "使用手机自带扫码即可下载APP", ko: "휴대폰으로 스캔하여 앱 다운로드", patchTrimmedLiteral: true },
@@ -417,6 +380,7 @@ const VUE_TEXT_MAPPINGS = [
   // 친구 탭
   { type: "text", zh: "黑名单", ko: "차단 목록", patchBlacklistCountText: true },
   { type: "text", zh: "实时观战", ko: "실시간 관전", patchTrimmedLiteral: true },
+  { type: "text", zh: "我的公会", ko: "내 길드", patchTrimmedLiteral: true },
   
   { type: "text", zh: "炙热沙城Ⅱ", ko: "더스트Ⅱ", patchGameMapName: true },
   { type: "text", zh: "荒漠迷城", ko: "신기루", patchGameMapName: true },
@@ -447,11 +411,15 @@ const VUE_TEXT_MAPPINGS = [
   { type: "text", zh: "检测到本设备当前CFG配置信息未完成云备份", ko: "현재 기기의 CFG 설정이 클라우드에 백업되지 않았습니다.", patchTrimmedLiteral: true },
   { type: "text", zh: "招募列表", ko: "모집 목록", patchTrimmedLiteral: true },
   { type: "text", zh: "收起", ko: "접기", patchTrimmedLiteral: true },
-  { type: "text", zh: "勾选绝对绿色需要更多匹配时长", ko: "녹색 전용 시 매칭이 지연될 수 있습니다.", patchTrimmedLiteral: true }
+  { type: "text", zh: "勾选绝对绿色需要更多匹配时长", ko: "녹색 전용 시 매칭이 지연될 수 있습니다.", patchTrimmedLiteral: true },
+
+  // 플레이 페이지 - 친구 초대 탭
+  { type: "text", zh: "一键邀请公会成员", ko: "길드원 일괄 초대", patchTrimmedLiteral: true },
+  { type: "text", zh: "所有公会成员在公会群聊中收到您的邀请信息每隔5分钟可发起一次邀请", ko: "모든 길드원이 길드 채팅에서 초대 메시지를 받습니다. 초대는 5분마다 보낼 수 있습니다.", patchTrimmedLiteral: true },
+  { type: "text", zh: "邀请", ko: "초대", patchTrimmedLiteral: true }
 ];
 
 // Vue text patch helpers
-
 function vueToUnicodeEscapeLower(str) {
   return str
     .split("")
@@ -490,6 +458,37 @@ function vuePatchContextMappings(state, contextMappings) {
       log(`[${state.rel}] ${rule.from} -> ${rule.to}`);
       return `${prefix}${rule.to}${suffix}`;
     });
+  }
+}
+
+// patchEnumMappings
+function vuePatchEnumMappings(state, textMappings) {
+  const mappings = textMappings.filter(
+    item =>
+      item.patchEnumMapping === true &&
+      item.key &&
+      item.zh &&
+      item.ko
+  );
+
+  if (mappings.length === 0) return;
+
+  for (const { key, zh, ko } of mappings) {
+    const regexList = [
+      makeEnumRegex(key, zh),
+      makeDirectKeyRegex(key, zh)
+    ];
+
+    for (const re of regexList) {
+      state.text = state.text.replace(re, (match, prefix, quote) => {
+        state.changed++;
+        state.total++;
+
+        log(`[${state.rel}] ${key}: ${zh} -> ${ko}`);
+
+        return `${prefix}${quote}${ko}${quote}`;
+      });
+    }
   }
 }
 
@@ -552,7 +551,6 @@ function vuePatchSignalLocationRender(state, textMappings) {
 
   const signalLocationMapLiteral = vueMakeMapLiteral(signalLocationMappings);
 
-  // 원본:
   // a("span",{staticClass:"city"},[
   //   a("i",{staticClass:"dot"}),
   //   e._v("\n            "+e._s(t.location)+"\n          ")
@@ -592,7 +590,7 @@ function vuePatchBlacklistCountText(state, textMappings) {
       return `${prefix}${quote}${before}${ko} (${quote}+`;
     });
 
-    // 닫는 괄호 "）" -> ")"
+    // "）" -> ")"
     const closeRe = new RegExp(
       `(blackUpperLimit\\)\\s*\\+\\s*)(["'\`])）`,
       "g"
@@ -620,7 +618,6 @@ function vuePatchPlayLinkTitleRender(state, textMappings) {
     return;
   }
 
-  // 원본:
   // s("p",{staticClass:"title"},[
   //   e._v("\n              "+e._s(t.title)+"\n            ")
   // ])
@@ -795,7 +792,6 @@ function vuePatchRoundWinText(state) {
 }
 
 // Main Vue text patcher
-
 function patchVueTextContext(files) {
   const contextMappings = VUE_TEXT_MAPPINGS.filter(m => m.type === "context");
   const textMappings = VUE_TEXT_MAPPINGS.filter(m => m.type === "text");
@@ -819,6 +815,7 @@ function patchVueTextContext(files) {
       total: 0
     };
 
+    vuePatchEnumMappings(state, VUE_TEXT_MAPPINGS);
     vuePatchContextMappings(state, contextMappings);
     vuePatchPanelTitleRender(state, textMappings);
     vuePatchTrimmedLiterals(state, textMappings);
@@ -889,11 +886,9 @@ function patchCustomerCenterDynamicText(files) {
       const mapLiteral = makeMapLiteral(rule.mappings);
       const pathRe = rule.objectPath.replace(/\./g, "\\.");
 
-      // 예:
       // e._s(e.categoryInfo.entryTitle)
       // t._s(t.categoryInfo.entryTitle)
       // n._s(n.categoryInfo.propagandaTitle)
-      //
       // 앞 변수명과 뒤 변수명이 같은 경우만 잡음
       const re = new RegExp(
         `([A-Za-z_$][\\w$]*)\\._s\\(\\1\\.${pathRe}\\)`,
@@ -1015,7 +1010,6 @@ function patchStaticStringMappings(files) {
     ["消息", "메시지"],
     ["联系人", "친구 목록"],
     ["我的好友", "내 친구"],
-    ["我的公会", "내 길드"],
     ["正在游戏", "게임 중"],
     ["当前在线", "온라인"],
     ["离线", "오프라인"],
@@ -1031,7 +1025,7 @@ function patchStaticStringMappings(files) {
     ["拉黑好友", "친구 차단"],
     ["发起决斗", "결투 신청"],
     ["邀请房间", "방 초대하기"],
-    ["加入房间", "방 참가"],
+    ["加入房间", "방 참가 요청"],
     ["加入游戏", "게임 참가"],
 
     // 친구 탭 추가창
@@ -1042,6 +1036,8 @@ function patchStaticStringMappings(files) {
     ["搜索", "검색"],
     ["您可以输入Steam昵称（全匹配搜索），Steam32位ID，Steam64位ID来查找玩家", "Steam 닉네임(완전 일치), Steam32 ID, Steam64 ID로 플레이어를 찾을 수 있습니다."],
     ["添加", "추가"],
+    ["忽略", "무시"],
+    ["同意", "동의"],
 
     // 플레이 페이지 통합
     ["房间号：", "방 번호:"],
@@ -1070,7 +1066,7 @@ function patchStaticStringMappings(files) {
     ["开始匹配", "매치 시작"],
     ["绿色认证匹配", "녹색 인증 매칭"],
     ["赛前准备", "매치 준비"],
-    ["寻找比赛...", "매치 찾는 중..."],
+    ["寻找比赛", "매칭 중"],
 
     // 플레이 페이지 우클릭
     ["踢出房间", "방 내보내기"],
@@ -1078,6 +1074,12 @@ function patchStaticStringMappings(files) {
     ["申请战队", "팀 가입 신청"],
     ["移交房主", "방장 위임"],
     ["申请公会", "길드 신청"],
+
+    // 플레이 페이지 친구 초대창
+    ["邀请列表", "초대 목록"],
+    ["申请列表", "신청 목록"],
+    ["好友邀请", "친구 초대"],
+    ["校友邀请", "동문 초대"],
 
     // 녹색 인증 페이지
     ["绿色玩家", "녹색 계정"],
@@ -1146,8 +1148,17 @@ function patchStaticStringMappings(files) {
 
     // 상단 중앙 빨간색 글 알림 창 - 통합
     ["请求失败", "요청 실패"],
+    ["敬请期待", "곧 공개 예정"],
+    ["服务器网络错误", "서버 네트워크 오류"],
+    ["服务器逻辑错误", "서버 처리 오류"],
+    ["无效的参数", "잘못된 매개변수"],
+    ["链接错误", "연결 오류"],
+    ["成功", "처리 완료"],
+    ["无效的请求参数", "잘못된 요청입니다."],
+    ["无效的请求", "잘못된 요청입니다."],
     ["获取本周举报信息失败", "신고 내역 불러오기 실패"],
     ["获取比赛状态超时", "매치 상태 확인 시간 초과"],
+    ["获取库存失败", "인벤토리 불러오기 실패"],
     ["请勿重复点击", "중복 클릭하지 마세요."],
     ["当前账号与steam账号不匹配！", "현재 계정과 Steam 계정이 일치하지 않습니다!"],
     ["请先登录steam/蒸汽平台", "먼저 Steam 계정에 로그인해 주세요."],
@@ -1161,42 +1172,41 @@ function patchStaticStringMappings(files) {
     ["匹配中无法修改地图！", "매칭 중에는 맵을 변경할 수 없습니다!"],
     ["匹配中无法修改大区！", "매칭 중에는 지역을 변경할 수 없습니다!"],
     ["匹配中无法切换房间！", "매칭 중에는 방을 변경할 수 없습니다!"],
+    ["匹配中无法邀请好友", "매칭 중에는 친구를 초대할 수 없습니다."],
     ["检测到您本地没有对应游戏地图", "로컬에 해당 게임 맵이 없습니다."],
     ["无法进入天梯", "랭크 방에 입장할 수 없습니다."], 
-
-    ["成功", "처리 완료"], // 이하 34a3e08f.js (매치 방)
-    ["没有足够的房间", "방이 부족합니다."],
-    ["无效的请求参数", "잘못된 요청입니다."],
     ["不是队长", "방장이 아닙니다."],
-    ["队伍已存在", "방이 이미 존재합니다"],
     ["玩家已经在匹配池或者在组队中", "플레이어가 이미 매칭 대기열 또는 파티에 있습니다."],
     ["只有队长才能操作", "방장만 조작할 수 있습니다."],
-    ["无效的请求", "잘못된 요청입니다."],
+    ["没有足够的房间", "방이 부족합니다."],
     ["玩家已存在", "이미 존재하는 플레이어입니다."],
+    ["队伍已存在", "방이 이미 존재합니다"],
     ["队伍不存在", "방이 존재하지 않습니다."],
-    ["服务器网络错误", "서버 네트워크 오류"],
-    ["无效的参数", "잘못된 매개변수"],
     ["房间不存在", "방이 존재하지 않습니다."],
+    ["不存在该房间", "해당 방이 존재하지 않습니다"],
     ["房间已锁定", "방이 잠겨 있습니다."],
+    ["没有空闲房间", "빈 방이 없습니다."],
+    ["房间已满", "방이 가득 찼습니다."],
     ["好友已设置屏蔽房间邀请", "친구가 방 초대 차단을 설정했습니다."],
     ["消息过期", "메시지가 만료되었습니다."],
     ["邀请失败", "초대 실패"],
     ["邀请错误！对方正在游戏中", "초대 실패! 상대가 게임 중입니다."],
-    ["匹配中无法邀请好友", "매칭 중에는 친구를 초대할 수 없습니다."],
     ["该模式正在维护中", "해당 모드는 점검 중입니다."],
-    ["服务器逻辑错误", "서버 처리 오류"],
     ["玩家被冷却", "플레이어가 쿨다운 상태입니다."],
     ["玩家被vac或者ow封禁", "플레이어가 VAC 또는 OW 차단 상태입니다."],
-    ["没有空闲房间", "빈 방이 없습니다."],
-    ["房间已满", "방이 가득 찼습니다."],
     ["正在创建房间中，请勿重复操作", "방 생성 중입니다. 중복 조작하지 마세요."],
-    ["敬请期待", "곧 공개 예정"],
-    ["链接错误", "연결 오류"],
     ["版本维护，暂无法跳转", "버전 점검 중이라 이동할 수 없습니다."],
     ["至少保留1个地区", "지역을 최소 1개 이상 선택해 주세요"],
 
-    // 상단 중앙 초록색 글 알림 창
-    ["复制成功，快去邀请好友吧", "복사 완료! 친구를 초대해 보세요."], // 34a3e08f.js (친구 탭)
+    // 상단 중앙 빨간색 글 알림 창 - 방 진입 창
+    ["您的好友当前不在游戏房间内，无法加入", "친구가 현재 게임 방에 없어 참가할 수 없습니다."],
+    ["房间成员已满", "방 인원이 가득 찼습니다."],
+    ["比赛已开始", "경기가 이미 시작되었습니다."],
+
+    // 상단 중앙 초록색 글 알림 창 - 친구 탭
+    ["复制成功，快去邀请好友吧", "복사 완료! 친구를 초대해 보세요."],
+    ["已申请加入...", "참가 요청 완료..."],
+    ["添加好友请求已发送", "친구 추가 요청을 보냈습니다."],
 
     // 매치 결과 창
     ["顶级突破手", "엔트리왕"],
@@ -1209,6 +1219,7 @@ function patchStaticStringMappings(files) {
     ["无私队友", "헌신적 팀원"],
     ["比赛掌控者", "경기 지배자"],
     ["道具鬼才", "유틸 천재"],
+    ["破釜沉舟", "배수의 진"],
 
     // 맵
     ["炙热沙城Ⅱ", "더스트 II"],
@@ -1293,6 +1304,12 @@ function patchInlineBase64Images(files) {
       name: "data-v-38d905a6",
       fromBase64Prefix: "iVBORw0KGgoAAAANSUhEUgAAAFEAAAAgCAMAAABdL2Rg",
       newImagePath: path.join(__dirname, "assets", "data-v-38d905a6.png")
+    },
+    // 매치 창 친구 추가 탭
+    {
+      name: "data-v-7db9eb06.png",
+      fromBase64Prefix: "iVBORw0KGgoAAAANSUhEUgAAALEAAACWCAMAAACmXpl5",
+      newImagePath: path.join(__dirname, "assets", "data-v-7db9eb06.png")
     }
   ];
 
@@ -1435,7 +1452,6 @@ function patchImageAssets() {
 function applyPatches() {
   const files = collectFiles(UNPACKED_DIR);
 
-  patchEnumMappings(files);
   patchVueTextContext(files);
   patchCustomerCenterDynamicText(files);
   patchStaticStringMappings(files);

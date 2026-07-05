@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.07.04.1",
+  "inlineBase64": [
+    {
+      "label": "마우스 오버 시 보이는 프로필",
+      "name": "data-v-68912e80",
+      "fromBase64Prefix": "iVBORw0KGgoAAAANSUhEUgAAAM8AAABqCAMAAAAsjvUw",
+      "asset": "data-v-68912e80.png"
+    },
+    {
+      "label": "메인화면 토끼",
+      "name": "index_rabbit_16sEq",
+      "fromBase64Prefix": "iVBORw0KGgoAAAANSUhEUgAAAFAAAABnCAMAAACgsDWK",
+      "asset": "index_rabbit_16sEq.png"
+    },
+    {
+      "label": "프로필 랭크 없음",
+      "name": "data-v-38d905a6",
+      "fromBase64Prefix": "iVBORw0KGgoAAAANSUhEUgAAAFEAAAAgCAMAAABdL2Rg",
+      "asset": "data-v-38d905a6.png"
+    },
+    {
+      "label": "매치 창 친구 추가 탭",
+      "name": "data-v-7db9eb06",
+      "fromBase64Prefix": "iVBORw0KGgoAAAANSUhEUgAAALEAAACWCAMAAACmXpl5",
+      "asset": "data-v-7db9eb06.png"
+    }
+  ],
+  "assetReplacements": [
+    {
+      "label": "런처 실행 페이지 스팀 로그인 아이콘",
+      "asset": "steam_zh.7cd84a6e.svg",
+      "target": "static/img/steam_zh.7cd84a6e.svg"
+    },
+    {
+      "label": "런처 실행 페이지 스팀 로그인 아이콘 2",
+      "asset": "icon_undetected.2d4102e1.png",
+      "target": "static/img/icon_undetected.2d4102e1.png"
+    },
+    {
+      "label": "정의 평가단 이벤트 배너",
+      "asset": "justice.e15ebd35.png",
+      "target": "static/img/justice.e15ebd35.png"
+    },
+    {
+      "label": "메인 화면 공식서버 아이콘",
+      "asset": "gf.ca1c9e7d.svg",
+      "target": "static/img/gf.ca1c9e7d.svg"
+    },
+    {
+      "label": "메인 화면 공식서버 아이콘 클릭",
+      "asset": "gf-hover.8f4ccfe3.svg",
+      "target": "static/img/gf-hover.8f4ccfe3.svg"
+    },
+    {
+      "label": "녹색 아이콘",
+      "asset": "green6.db86ef26.svg",
+      "target": "static/img/green6.db86ef26.svg"
+    },
+    {
+      "label": "녹색 아이콘 2",
+      "asset": "green6.h.19933a7a.svg",
+      "target": "static/img/green6.h.19933a7a.svg"
+    },
+    {
+      "label": "베테랑 아이콘",
+      "asset": "green7.286d29d5.svg",
+      "target": "static/img/green7.286d29d5.svg"
+    },
+    {
+      "label": "베테랑 아이콘 2",
+      "asset": "green7.h.f4e4240c.svg",
+      "target": "static/img/green7.h.f4e4240c.svg"
+    }
+  ]
+}

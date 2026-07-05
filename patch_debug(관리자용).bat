@@ -26,8 +26,10 @@ echo.
 pause
 
 set "PATCH_DIR=%~dp0"
-set "PATCHER=%PATCH_DIR%patcher.js"
-set "DEBUG_TOOLS=%PATCH_DIR%debug_tools.js"
+set "INTERNAL_DIR=%PATCH_DIR%_internal"
+
+set "PATCHER=%INTERNAL_DIR%\patcher_debug.js"
+set "DEBUG_TOOLS=%INTERNAL_DIR%\patcher_debug.js"
 set "LOCAL_NODE=%PATCH_DIR%tools\node-v26.2.0-win-x64\node.exe"
 
 echo.

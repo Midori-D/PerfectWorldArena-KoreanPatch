@@ -72,7 +72,7 @@ echo.
 echo [info] Current folder: %cd%
 echo.
 
-set "NODE_EXE=%~dp0tools\node-v26.2.0-win-x64\node.exe"
+set "NODE_EXE=%~dp0tools\node-v26.4.0-win-x64\node.exe"
 
 if not exist "%NODE_EXE%" (
   color 0C

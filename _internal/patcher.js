@@ -20,12 +20,12 @@ try {
   asar = localRequire("@electron/asar");
 
   console.log(
-    `[info] asar 모듈 로드 완료: ${localRequire.resolve("@electron/asar")}`
+    `[info] asar loaded: ${localRequire.resolve("@electron/asar")}`
   );
 } catch (err) {
   console.error("[error] asar 모듈을 불러오지 못했습니다.");
   console.error(`[error] 확인 경로: ${LOCAL_ASAR_PATH}`);
-  console.error("이 오류를 발견하셨다면 Midori 개발자에게 제보해 주세요!");
+  console.error("이 오류를 발견하셨다면 개발자 Midori에게 제보해 주세요!");
   throw err;
 }
 
@@ -35,6 +35,7 @@ if (!fs.existsSync(path.join(LOCAL_ASAR_PATH, "package.json"))) {
   );
 }
 
+// debug
 const DEBUG_MODE = process.argv.includes("--debug");
 const {
   debugCheckPatchMappings,
@@ -230,6 +231,8 @@ function replaceOriginal() {
   log(`[replace] ${PATCHED_ASAR} -> ${APP_ASAR}`);
 }
 
+
+// Core
 function shouldSkip(full) {
   return (
     full.includes(`${path.sep}node_modules${path.sep}`) ||
@@ -328,6 +331,7 @@ function loadJsonFile(fileName) {
   }
 }
 
+// Load .json mapping files
 function loadPatchData() {
   const staticData = loadJsonFile("static.json");
   const vueData = loadJsonFile("vue.json");
@@ -339,15 +343,17 @@ function loadPatchData() {
     item.ko
   ]);
 
-  // vue.json의 문자열 정규식을 실제 RegExp 객체로 변환
   const vueMappings = (vueData.mappings || []).map(item => {
-    if (item.type !== "context") {
+    if (typeof item.regex !== "string") {
       return item;
     }
 
     return {
       ...item,
-      regex: new RegExp(item.regex, item.regexFlags || "g")
+      regex: new RegExp(
+        item.regex,
+        item.regexFlags || "g"
+      )
     };
   });
 
@@ -422,119 +428,229 @@ function vueLogMappings(rel, mappings) {
   }
 }
 
-// patchEnumMappings
-function vuePatchEnumMappings(state, textMappings) {
-  const mappings = textMappings.filter(
+// **patchRegex**
+function vuePatchRegexRules(state, mappings) {
+  const rules = mappings.filter(
     item =>
-      item.patchEnumMapping === true &&
-      item.key &&
-      item.zh &&
-      item.ko
+      item.type === "regex" &&
+      item.profile
   );
 
-  if (mappings.length === 0) return;
+  if (rules.length === 0) return;
 
-  for (const { key, zh, ko } of mappings) {
-    const regexList = [
-      makeEnumRegex(key, zh),
-      makeDirectKeyRegex(key, zh)
-    ];
+  for (const rule of rules) {
+    switch (rule.profile) {
 
-    for (const re of regexList) {
-      state.text = state.text.replace(re, (match, prefix, quote) => {
-        state.changed++;
-        state.total++;
+      // "profile": "enum" 번역, [e.HomePage]&#58; "首页"
+      case "enum": {
+        if (!rule.key || !rule.zh || !rule.ko) {
+          break;
+        }
 
-        log(`[${state.rel}] ${key}: ${zh} -> ${ko}`);
+        const regexList = [
+          makeEnumRegex(rule.key, rule.zh),
+          makeDirectKeyRegex(rule.key, rule.zh)
+        ];
 
-        return `${prefix}${quote}${ko}${quote}`;
-      });
+        for (const re of regexList) {
+          state.text = state.text.replace(
+            re,
+            (match, prefix, quote) => {
+              state.changed++;
+              state.total++;
+
+              log(
+                `[${state.rel}] ${rule.key}: ` +
+                `${rule.zh} -> ${rule.ko}`
+              );
+
+              return (
+                `${prefix}${quote}` +
+                `${rule.ko}` +
+                `${quote}`
+              );
+            }
+          );
+        }
+
+        break;
+      }
+
+      // "profile": "context" 번역, `${prefix}${rule.to}${suffix}`
+      case "context": {
+        if (!(rule.regex instanceof RegExp) || !rule.to) {
+          break;
+        }
+
+        const re = new RegExp(
+          rule.regex.source,
+          rule.regex.flags
+        );
+
+        state.text = state.text.replace(
+          re,
+          (match, prefix, suffix) => {
+            state.changed++;
+            state.total++;
+
+            log(
+              `[${state.rel}] ` +
+              `${rule.from || "context"} -> ${rule.to}`
+            );
+
+            return `${prefix}${rule.to}${suffix}`;
+          }
+        );
+
+        break;
+      }
+
+      // "profile": "blacklistCount" 번역, '"\n                黑名单 ("'
+      case "blacklistCount": {
+        if (!rule.zh || !rule.ko) {
+          break;
+        }
+
+        const zh = escapeRegExp(rule.zh);
+
+        const re = new RegExp(
+          `(\\._v\\(\\s*["'\`]` +
+          `(?:(?:\\\\[nrt])|\\s)*)` +
+          `${zh}`,
+          "g"
+        );
+
+        state.text = state.text.replace(
+          re,
+          (match, prefix) => {
+            state.changed++;
+            state.total++;
+
+            log(
+              `[${state.rel}] ` +
+              `${rule.zh} -> ${rule.ko}`
+            );
+
+            return `${prefix}${rule.ko}`;
+          }
+        );
+
+        break;
+      }
+
+      default:
+        break;
     }
   }
 }
 
-function vuePatchContextMappings(state, contextMappings) {
-  for (const rule of contextMappings) {
-    state.text = state.text.replace(rule.regex, (match, prefix, suffix) => {
-      state.changed++;
-      state.total++;
-      log(`[${state.rel}] ${rule.from} -> ${rule.to}`);
-      return `${prefix}${rule.to}${suffix}`;
-    });
-  }
-}
-
-// vuePatchRoundWinText, 매치 탭 ~라운드 승리 패치 - 검토 필요!!
-function vuePatchRoundWinText(state) {
-  const roundWinTextRegex =
-    /(\._v\(\s*)(["'`])((?:(?:\\[nrt])|\s)*)(\d+)回合胜利((?:(?:\\[nrt])|\s)*)\2(\s*\))/g;
-
-  state.text = state.text.replace(roundWinTextRegex, (match, prefix, quote, before, num, after, suffix) => {
-    state.changed++;
-    state.total++;
-    log(`[${state.rel}] ${num}回合胜利 -> ${num}라운드 승리`);
-    return `${prefix}${quote}${before}${num}라운드 승리${after}${quote}${suffix}`;
-  });
-}
-
-// patchBlacklistCountText
-function vuePatchBlacklistCountText(state, textMappings) {
-  const blacklistCountMappings = textMappings.filter(m => m.patchBlacklistCountText);
-  if (blacklistCountMappings.length === 0) return;
-
-  for (const mapping of blacklistCountMappings) {
-    const zh = escapeRegExp(mapping.zh);
-    const ko = mapping.ko;
-
-    // e._v("\n                黑名单（"+e._s(e.blackList.length)+"/"+e._s(e.blackUpperLimit)+"）\n              ")
-    const openRe = new RegExp(
-      `(\\._v\\(\\s*)(["'\`])((?:(?:\\\\[nrt])|\\s)*)${zh}（\\2\\s*\\+`,
-      "g"
-    );
-
-    state.text = state.text.replace(openRe, (match, prefix, quote, before) => {
-      state.changed++;
-      state.total++;
-      log(`[${state.rel}] ${mapping.zh} -> ${mapping.ko}`);
-      return `${prefix}${quote}${before}${ko} (${quote}+`;
-    });
-
-    // "）" -> ")"
-    const closeRe = new RegExp(
-      `(blackUpperLimit\\)\\s*\\+\\s*)(["'\`])）`,
-      "g"
-    );
-
-    state.text = state.text.replace(closeRe, (match, prefix, quote) => {
-      return `${prefix}${quote})`;
-    });
-  }
-}
-
-function vuePatchAnchoredLiterals(state, textMappings) {
-  const mappings = textMappings.filter(
+// **patchLiteral**
+function vuePatchLiteralRules(state, textMappings) {
+  const rules = textMappings.filter(
     item =>
-      item.patchAnchoredLiteral === true &&
-      item.anchorRegex &&
+      item.patchLiteral === true &&
       item.zh &&
       item.ko
   );
 
-  if (mappings.length === 0) return;
+  if (rules.length === 0) return;
 
+  // "", "\n", "\r", "\t"
   const ws = String.raw`(?:(?:\\[nrt])|\s)*`;
 
-  for (const rule of mappings) {
-    const {
-      zh,
-      ko,
-      anchorRegex,
-      direction = "after"
-    } = rule;
+  function makeVariants(zh, ko) {
+    const variants = [
+      {
+        from: zh,
+        to: ko
+      },
+      {
+        from: vueToUnicodeEscapeLower(zh),
+        to: vueToUnicodeEscapeLower(ko)
+      },
+      {
+        from: vueToUnicodeEscapeUpper(zh),
+        to: vueToUnicodeEscapeUpper(ko)
+      }
+    ];
 
-    const maxDistance = Number.isFinite(rule.maxDistance)
-      ? rule.maxDistance
-      : 300;
+    return variants.filter(
+      (item, index, array) =>
+        item.from &&
+        array.findIndex(other => other.from === item.from) === index
+    );
+  }
+
+  // "patchLiteral": true 번역, "\n      {rule.to}\n    "
+  function patchSegment(segment, rule) {
+    let changed = 0;
+
+    const variants = makeVariants(rule.zh, rule.ko);
+
+    for (const { from, to } of variants) {
+      const escaped = escapeRegExp(from);
+
+      const targetRe = new RegExp(
+        `(["'\`])` +
+        `(${ws})` +
+        `${escaped}` +
+        `(${ws})` +
+        `\\1`,
+        "g"
+      );
+
+      segment = segment.replace(
+        targetRe,
+        (match, quote, before, after) => {
+          changed++;
+          state.changed++;
+          state.total++;
+
+          log(
+            `[${state.rel}] literal: ` +
+            `${rule.zh} -> ${rule.ko}` +
+            (
+              rule.anchorRegex || rule.anchor
+                ? " [anchored]"
+                : ""
+            )
+          );
+
+          return `${quote}${before}${to}${after}${quote}`;
+        }
+      );
+    }
+
+    return {
+      text: segment,
+      changed
+    };
+  }
+
+  for (const rule of rules) {
+    const hasAnchor =
+      typeof rule.anchorRegex === "string" ||
+      typeof rule.anchor === "string";
+
+    if (!hasAnchor) {
+      const result = patchSegment(
+        state.text,
+        rule,
+      );
+
+      state.text = result.text;
+      continue;
+    }
+
+    // "patchLiteral": true, "anchorRegex":... 번역, "\n      {rule.to}\n    "
+    let anchorSource;
+
+    if (typeof rule.anchorRegex === "string") {
+      anchorSource = rule.anchorRegex;
+    } else {
+
+      anchorSource = escapeRegExp(rule.anchor);
+    }
 
     let anchorFlags = rule.anchorFlags || "g";
 
@@ -545,127 +661,91 @@ function vuePatchAnchoredLiterals(state, textMappings) {
     let anchorRe;
 
     try {
-      anchorRe = new RegExp(anchorRegex, anchorFlags);
+      anchorRe = new RegExp(
+        anchorSource,
+        anchorFlags
+      );
     } catch (err) {
       log(
-        `[skip:anchored-literal] 잘못된 anchorRegex: ${anchorRegex} (${err.message})`
+        `[skip:literal] 잘못된 anchorRegex: ` +
+        `${anchorSource} (${err.message})`
       );
       continue;
     }
 
-    const anchors = [...state.text.matchAll(anchorRe)];
+    const anchors = Array.from(
+      state.text.matchAll(anchorRe)
+    );
 
     if (anchors.length === 0) {
       continue;
     }
 
-    const targetVariants = [
-      zh,
-      vueToUnicodeEscapeLower(zh),
-      vueToUnicodeEscapeUpper(zh)
-    ];
+    const direction = rule.direction || "after";
 
-    /*
-      뒤쪽 anchor부터 처리해야 번역 후 문자열 길이가 달라져도
-      앞쪽 anchor 위치가 어긋나지 않습니다.
-    */
+    const maxDistance = Number.isFinite(rule.maxDistance)
+      ? Math.max(0, rule.maxDistance)
+      : 300;
+
     for (let i = anchors.length - 1; i >= 0; i--) {
-      const anchor = anchors[i];
-      const anchorStart = anchor.index;
-      const anchorEnd = anchorStart + anchor[0].length;
+      const anchorMatch = anchors[i];
+
+      const anchorStart = anchorMatch.index;
+      const anchorEnd =
+        anchorStart + anchorMatch[0].length;
 
       let rangeStart;
       let rangeEnd;
 
-      if (direction === "before") {
-        rangeStart = Math.max(0, anchorStart - maxDistance);
-        rangeEnd = anchorStart;
-      } else if (direction === "both") {
-        rangeStart = Math.max(0, anchorStart - maxDistance);
-        rangeEnd = Math.min(
-          state.text.length,
-          anchorEnd + maxDistance
-        );
-      } else {
-        rangeStart = anchorEnd;
-        rangeEnd = Math.min(
-          state.text.length,
-          anchorEnd + maxDistance
-        );
+      // "direction": "before", "after", "both"
+      switch (direction) {
+        case "before":
+          rangeStart = Math.max(
+            0,
+            anchorStart - maxDistance
+          );
+          rangeEnd = anchorStart;
+          break;
+
+        case "both":
+          rangeStart = Math.max(
+            0,
+            anchorStart - maxDistance
+          );
+          rangeEnd = Math.min(
+            state.text.length,
+            anchorEnd + maxDistance
+          );
+          break;
+
+        case "after":
+        default:
+          rangeStart = anchorEnd;
+          rangeEnd = Math.min(
+            state.text.length,
+            anchorEnd + maxDistance
+          );
+          break;
       }
 
-      let segment = state.text.slice(rangeStart, rangeEnd);
-      let patched = false;
-
-      for (const variant of targetVariants) {
-        if (patched) break;
-
-        const escaped = escapeRegExp(variant);
-
-        /*
-          다음 형태를 찾습니다.
-
-          "邀请"
-          "\n      邀请\n    "
-          '\n 邀请 \n'
-        */
-        const targetRe = new RegExp(
-          `(["'\`])(${ws})${escaped}(${ws})\\1`
-        );
-
-        segment = segment.replace(
-          targetRe,
-          (match, quote, before, after) => {
-            patched = true;
-            state.changed++;
-            state.total++;
-
-            log(
-              `[${state.rel}] anchor 번역: ${zh} -> ${ko}`
-            );
-
-            return `${quote}${before}${ko}${after}${quote}`;
-          }
-        );
-      }
-
-      if (patched) {
-        state.text =
-          state.text.slice(0, rangeStart) +
-          segment +
-          state.text.slice(rangeEnd);
-      }
-    }
-  }
-}
-
-// patchTrimmedLiteral
-function vuePatchTrimmedLiterals(state, textMappings) {
-  const ws = String.raw`(?:(?:\\[nrt])|\s)*`;
-
-  for (const mapping of textMappings.filter(m => m.patchTrimmedLiteral)) {
-    const { zh, ko } = mapping;
-
-    const variants = [
-      zh,
-      vueToUnicodeEscapeLower(zh),
-      vueToUnicodeEscapeUpper(zh)
-    ];
-
-    for (const variant of variants) {
-      const z = escapeRegExp(variant);
-
-      const re = new RegExp(
-        `(["'\`])(${ws})${z}(${ws})\\1`,
-        "g"
+      const segment = state.text.slice(
+        rangeStart,
+        rangeEnd
       );
 
-      state.text = state.text.replace(re, (match, quote, before, after) => {
-        state.changed++;
-        state.total++;
-        log(`[${state.rel}] ${zh} -> ${ko}`);
-        return `${quote}${before}${ko}${after}${quote}`;
-      });
+      const result = patchSegment(
+        segment,
+        rule,
+      );
+
+      if (result.changed === 0) {
+        continue;
+      }
+
+      state.text =
+        state.text.slice(0, rangeStart) +
+        result.text +
+        state.text.slice(rangeEnd);
     }
   }
 }
@@ -893,7 +973,6 @@ function vuePatchRelativeTimeText(state) {
 
 // Main Vue text patcher
 function patchVueTextContext(files, mappings) {
-  const contextMappings = mappings.filter(m => m.type === "context");
   const textMappings = mappings.filter(m => m.type === "text");
 
   let total = 0;
@@ -914,18 +993,14 @@ function patchVueTextContext(files, mappings) {
       changed: 0,
       total: 0
     };
+    vuePatchRegexRules(state, mappings);
+    vuePatchLiteralRules(state, textMappings);
 
-    vuePatchEnumMappings(state, mappings); // 제거 
-    vuePatchContextMappings(state, contextMappings); // 제거
-    vuePatchRoundWinText(state); // 제거
-    vuePatchBlacklistCountText(state, textMappings); // 제거
-    vuePatchPanelTitleRender(state, textMappings);
-    vuePatchAnchoredLiterals(state, textMappings);
-    vuePatchTrimmedLiterals(state, textMappings);
-    vuePatchSignalLocationRender(state, textMappings);
-    vuePatchPlayLinkTitleRender(state, textMappings);
-    vuePatchPlayTitleExpression(state, textMappings);
-    vuePatchGameMapName(state, textMappings);
+    vuePatchPanelTitleRender(state, textMappings); // 통합
+    vuePatchSignalLocationRender(state, textMappings); // 통합
+    vuePatchPlayLinkTitleRender(state, textMappings); // 통합
+    vuePatchPlayTitleExpression(state, textMappings); // 통합
+    vuePatchGameMapName(state, textMappings); // 통합
     vuePatchRelativeTimeText(state);
     if (state.changed > 0) {
       writeText(full, state.text);

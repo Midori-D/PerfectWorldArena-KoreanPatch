@@ -11,11 +11,11 @@ echo   완미세계 경기 플랫폼 한국어 패치 - 디버그 모드
 echo ============================================================
 echo.
 echo 이 모드는 패치를 실행한 뒤,
-echo 번역 매핑이 정상 적용되었는지 logs 폴더에 기록합니다.
+echo 번역 매핑이 정상 적용되었는지 .work\logs 폴더에 기록합니다.
 echo.
 echo 생성 예시:
-echo   logs\mapping_check_20260611_153000.log
-echo   logs\static_mapping_check_20260611_153000.log
+echo   .work\logs\mapping_check_20260611_153000.log
+echo   .work\logs\static_mapping_check_20260611_153000.log
 echo.
 echo 상태 설명:
 echo   [OK]       이번 실행에서 적용됨 또는 한국어 결과가 있음
@@ -28,9 +28,10 @@ pause
 set "PATCH_DIR=%~dp0"
 set "INTERNAL_DIR=%PATCH_DIR%_internal"
 
-set "PATCHER=%INTERNAL_DIR%\patcher_debug.js"
+set "PATCHER=%INTERNAL_DIR%\patcher.js"
 set "DEBUG_TOOLS=%INTERNAL_DIR%\patcher_debug.js"
-set "LOCAL_NODE=%PATCH_DIR%tools\node-v26.2.0-win-x64\node.exe"
+set "LOCAL_NODE=%PATCH_DIR%tools\node-v26.4.0-win-x64\node.exe"
+set "DEBUG_LOG_DIR=%PATCH_DIR%.work\logs"
 
 echo.
 echo [info] 패치 폴더:
@@ -48,10 +49,10 @@ if not exist "%PATCHER%" (
 
 if not exist "%DEBUG_TOOLS%" (
   color 0C
-  echo [error] debug_tools.js를 찾을 수 없습니다.
+  echo [error] patcher_debug.js를 찾을 수 없습니다.
   echo 위치: %DEBUG_TOOLS%
   echo.
-  echo debug_tools.js를 patcher.js와 같은 폴더에 넣어 주세요.
+  echo patcher_debug.js를 patcher.js와 같은 _internal 폴더에 넣어 주세요.
   echo.
   pause
   exit /b 1
@@ -60,6 +61,17 @@ if not exist "%DEBUG_TOOLS%" (
 if exist "%LOCAL_NODE%" (
   set "NODE_CMD=%LOCAL_NODE%"
 ) else (
+  where node >nul 2>nul
+  if errorlevel 1 (
+    color 0C
+    echo [error] Node.js 실행 파일을 찾을 수 없습니다.
+    echo 확인 위치: %LOCAL_NODE%
+    echo PATH에서도 node.exe를 찾지 못했습니다.
+    echo.
+    pause
+    exit /b 1
+  )
+
   set "NODE_CMD=node"
 )
 
@@ -67,12 +79,17 @@ echo [info] Node 실행 파일:
 echo %NODE_CMD%
 echo.
 
+echo [info] 실제 패처:
+echo %PATCHER%
+echo.
+
 echo [info] 디버그 모드로 패치를 실행합니다...
 echo.
 
+pushd "%PATCH_DIR%"
 "%NODE_CMD%" "%PATCHER%" --debug
-
 set "RESULT=%errorlevel%"
+popd
 
 echo.
 if not "%RESULT%"=="0" (
@@ -92,14 +109,17 @@ echo ============================================================
 echo   디버그 패치가 완료되었습니다.
 echo ============================================================
 echo.
-echo logs 폴더에서 아래 파일을 확인해 주세요.
+echo 아래 로그 폴더를 확인해 주세요.
+echo %DEBUG_LOG_DIR%
 echo.
 echo   mapping_check_날짜.log
 echo   static_mapping_check_날짜.log
 echo.
 
-if exist "%PATCH_DIR%logs" (
-  explorer "%PATCH_DIR%logs"
+if exist "%DEBUG_LOG_DIR%" (
+  explorer "%DEBUG_LOG_DIR%"
+) else (
+  echo [warn] 로그 폴더가 아직 생성되지 않았습니다.
 )
 
 pause

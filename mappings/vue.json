@@ -31,7 +31,6 @@
     { "section": "메인 페이지", "type": "text", "zh": "信誉等级:", "ko": "신뢰 등급:", "patchLiteral": true },
     { "section": "메인 페이지", "type": "text", "zh": "完美助手", "ko": "완미 도우미", "patchPanelTitle": true },
     { "section": "메인 페이지", "type": "text", "zh": "练枪模式", "ko": "에임 연습", "patchPanelTitle": true },
-    { "section": "메인 페이지", "type": "text", "zh": "狙击挑战", "ko": "저격 챌린지", "patchPanelTitle": true },
 
     { "section": "닫기 창", "type": "text", "zh": "随时查战绩、看回放", "ko": "전적 확인·다시보기", "patchLiteral": true },
 
@@ -49,6 +48,7 @@
     { "section": "친구 탭", "type": "text", "zh": "炼狱小镇", "ko": "인페르노", "patchGameMapName": true },
     { "section": "친구 탭", "type": "text", "zh": "核子危机", "ko": "핵시설", "patchGameMapName": true },
     { "section": "친구 탭", "type": "text", "zh": "远古遗迹", "ko": "고대", "patchGameMapName": true },
+    { "section": "친구 탭", "type": "text", "zh": "远古雨迹", "ko": "고대", "patchGameMapName": true },
     { "section": "친구 탭", "type": "text", "zh": "阿努比斯", "ko": "아누비스", "patchGameMapName": true },
     { "section": "친구 탭", "type": "text", "zh": "殒命大厦", "ko": "버티고", "patchGameMapName": true },
     { "section": "친구 탭", "type": "text", "zh": "死亡游乐园", "ko": "고가도로", "patchGameMapName": true },
@@ -76,6 +76,27 @@
     
     { "section": "플레이 페이지 - 친구 초대 탭", "type": "text", "zh": "一键邀请公会成员", "ko": "길드원 일괄 초대", "patchLiteral": true },
     { "section": "플레이 페이지 - 친구 초대 탭", "type": "text", "zh": "所有公会成员在公会群聊中收到您的邀请信息每隔5分钟可发起一次邀请", "ko": "모든 길드원이 길드 채팅에서 초대 메시지를 받습니다. 초대는 5분마다 보낼 수 있습니다.", "patchLiteral": true },
-    { "section": "플레이 페이지 - 친구 초대 탭", "type": "text", "zh": "邀请", "ko": "초대", "patchLiteral": true, "anchorRegex": "\\.applyFriend\\(\\s*[A-Za-z_$][\\w$]*\\.item\\s*\\)", "direction": "after", "maxDistance": 100 }
+
+    {
+      "section": "고객센터 질문 제목",
+      "type": "dynamicRender",
+      "profile": "objectPathMap",
+      "name": "customer-center-entry-title",
+      "objectPath": "categoryInfo.entryTitle",
+      "mappings": [
+        ["游戏启动慢如何解决?", "게임 실행이 느릴 때 어떻게 하나요?"],
+        ["游戏启动慢如何解决？", "게임 실행이 느릴 때 어떻게 하나요?"]
+      ]
+    },
+    {
+      "section": "고객센터 홍보 제목",
+      "type": "dynamicRender",
+      "profile": "objectPathMap",
+      "name": "customer-center-propaganda-title",
+      "objectPath": "categoryInfo.propagandaTitle",
+      "mappings": [
+        ["兔管答疑", "토끼 상담"]
+      ]
+    }
   ]
 }

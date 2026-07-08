@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.07.08.1",
+  "mappings": [
+    { "section": "2026 S2 메인 패널", "type": "text", "zh": "时刻", "ko": "모먼트", "patchPanelTitle": true }
+  ]
+}

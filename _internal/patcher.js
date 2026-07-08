@@ -29,18 +29,15 @@ try {
   throw err;
 }
 
-if (!fs.existsSync(path.join(LOCAL_ASAR_PATH, "package.json"))) {
-  throw new Error(
-    `[error] asar package.json을 찾을 수 없습니다.\n${path.join(LOCAL_ASAR_PATH, "package.json")}`
-  );
-}
-
 // debug
 const DEBUG_MODE = process.argv.includes("--debug");
 const {
   debugCheckPatchMappings,
   createStaticMappingDebugSession
 } = require("./patcher_debug.js");
+const {
+  patchVueRenderRules
+} = require("./patcher_renders.js");
 
 // paw_path.txt
 const PATH_FILE = path.join(ROOT_DIR, "pwa_path.txt");
@@ -231,7 +228,6 @@ function replaceOriginal() {
   log(`[replace] ${PATCHED_ASAR} -> ${APP_ASAR}`);
 }
 
-
 // Core
 function shouldSkip(full) {
   return (
@@ -336,14 +332,14 @@ function loadPatchData() {
   const staticData = loadJsonFile("static.json");
   const vueData = loadJsonFile("vue.json");
   const imageData = loadJsonFile("images.json");
-  const dynamicData = loadJsonFile("dynamic.json");
+  const eventData = loadJsonFile("event.json");
 
   const staticMappings = (staticData.mappings || []).map(item => [
     item.zh,
     item.ko
   ]);
 
-  const vueMappings = (vueData.mappings || []).map(item => {
+  const vueMappings = [...(vueData.mappings || []), ...(eventData.mappings || [])].map(item => {
     if (typeof item.regex !== "string") {
       return item;
     }
@@ -356,8 +352,6 @@ function loadPatchData() {
       )
     };
   });
-
-  const dynamicRules = dynamicData.rules || [];
 
   const inlineImageMappings = (imageData.inlineBase64 || []).map(item => ({
     label: item.label || item.name,
@@ -384,14 +378,13 @@ function loadPatchData() {
   log(
     `[mapping] static=${staticData.version}, ` +
     `vue=${vueData.version}, ` +
-    `dynamic=${dynamicData.version}, ` +
-    `images=${imageData.version}`
+    `images=${imageData.version}, ` +
+    `event=${eventData.version}`
   );
 
   return {
     staticMappings,
     vueMappings,
-    dynamicRules,
     inlineImageMappings,
     imageAssetReplacements
   };
@@ -412,23 +405,7 @@ function vueToUnicodeEscapeUpper(str) {
     .join("");
 }
 
-function vueToUnicodeEscapedJsString(str) {
-  return `"${vueToUnicodeEscapeLower(str)}"`;
-}
-
-function vueMakeMapLiteral(mappings) {
-  return `{${mappings
-    .map(m => `${vueToUnicodeEscapedJsString(m.zh)}:${JSON.stringify(m.ko)}`)
-    .join(",")}}`;
-}
-
-function vueLogMappings(rel, mappings) {
-  for (const mapping of mappings) {
-    log(`[${rel}] ${mapping.zh} -> ${mapping.ko}`);
-  }
-}
-
-// **patchRegex**
+// vuePatch*Regex* 패치
 function vuePatchRegexRules(state, mappings) {
   const rules = mappings.filter(
     item =>
@@ -460,10 +437,10 @@ function vuePatchRegexRules(state, mappings) {
               state.total++;
 
               log(
-                `[${state.rel}] ${rule.key}: ` +
+                `[${state.rel}] Regex, profile:${rule.profile} ` +
                 `${rule.zh} -> ${rule.ko}`
               );
-
+              
               return (
                 `${prefix}${quote}` +
                 `${rule.ko}` +
@@ -494,7 +471,7 @@ function vuePatchRegexRules(state, mappings) {
             state.total++;
 
             log(
-              `[${state.rel}] ` +
+              `[${state.rel}] Regex, profile:${rule.profile} ` +
               `${rule.from || "context"} -> ${rule.to}`
             );
 
@@ -527,7 +504,7 @@ function vuePatchRegexRules(state, mappings) {
             state.total++;
 
             log(
-              `[${state.rel}] ` +
+              `[${state.rel}] Regex, profile:${rule.profile} ` +
               `${rule.zh} -> ${rule.ko}`
             );
 
@@ -544,8 +521,10 @@ function vuePatchRegexRules(state, mappings) {
   }
 }
 
-// **patchLiteral**
+// vuePatch*Literal* 패치
 function vuePatchLiteralRules(state, textMappings) {
+  
+  // "patchLiteral": true 번역, "\n      {rule.to}\n    "
   const rules = textMappings.filter(
     item =>
       item.patchLiteral === true &&
@@ -555,7 +534,6 @@ function vuePatchLiteralRules(state, textMappings) {
 
   if (rules.length === 0) return;
 
-  // "", "\n", "\r", "\t"
   const ws = String.raw`(?:(?:\\[nrt])|\s)*`;
 
   function makeVariants(zh, ko) {
@@ -577,15 +555,19 @@ function vuePatchLiteralRules(state, textMappings) {
     return variants.filter(
       (item, index, array) =>
         item.from &&
-        array.findIndex(other => other.from === item.from) === index
+        array.findIndex(
+          other => other.from === item.from
+        ) === index
     );
   }
 
-  // "patchLiteral": true 번역, "\n      {rule.to}\n    "
   function patchSegment(segment, rule) {
     let changed = 0;
 
-    const variants = makeVariants(rule.zh, rule.ko);
+    const variants = makeVariants(
+      rule.zh,
+      rule.ko
+    );
 
     for (const { from, to } of variants) {
       const escaped = escapeRegExp(from);
@@ -607,16 +589,14 @@ function vuePatchLiteralRules(state, textMappings) {
           state.total++;
 
           log(
-            `[${state.rel}] literal: ` +
-            `${rule.zh} -> ${rule.ko}` +
-            (
-              rule.anchorRegex || rule.anchor
-                ? " [anchored]"
-                : ""
-            )
+            `[${state.rel}] Text, patchLiteral ` +
+            `${rule.zh} -> ${rule.ko}`
           );
 
-          return `${quote}${before}${to}${after}${quote}`;
+          return (
+            `${quote}${before}` +
+            `${to}${after}${quote}`
+          );
         }
       );
     }
@@ -628,316 +608,16 @@ function vuePatchLiteralRules(state, textMappings) {
   }
 
   for (const rule of rules) {
-    const hasAnchor =
-      typeof rule.anchorRegex === "string" ||
-      typeof rule.anchor === "string";
-
-    if (!hasAnchor) {
-      const result = patchSegment(
-        state.text,
-        rule,
-      );
-
-      state.text = result.text;
-      continue;
-    }
-
-    // "patchLiteral": true, "anchorRegex":... 번역, "\n      {rule.to}\n    "
-    let anchorSource;
-
-    if (typeof rule.anchorRegex === "string") {
-      anchorSource = rule.anchorRegex;
-    } else {
-
-      anchorSource = escapeRegExp(rule.anchor);
-    }
-
-    let anchorFlags = rule.anchorFlags || "g";
-
-    if (!anchorFlags.includes("g")) {
-      anchorFlags += "g";
-    }
-
-    let anchorRe;
-
-    try {
-      anchorRe = new RegExp(
-        anchorSource,
-        anchorFlags
-      );
-    } catch (err) {
-      log(
-        `[skip:literal] 잘못된 anchorRegex: ` +
-        `${anchorSource} (${err.message})`
-      );
-      continue;
-    }
-
-    const anchors = Array.from(
-      state.text.matchAll(anchorRe)
+    const result = patchSegment(
+      state.text,
+      rule
     );
 
-    if (anchors.length === 0) {
-      continue;
-    }
-
-    const direction = rule.direction || "after";
-
-    const maxDistance = Number.isFinite(rule.maxDistance)
-      ? Math.max(0, rule.maxDistance)
-      : 300;
-
-    for (let i = anchors.length - 1; i >= 0; i--) {
-      const anchorMatch = anchors[i];
-
-      const anchorStart = anchorMatch.index;
-      const anchorEnd =
-        anchorStart + anchorMatch[0].length;
-
-      let rangeStart;
-      let rangeEnd;
-
-      // "direction": "before", "after", "both"
-      switch (direction) {
-        case "before":
-          rangeStart = Math.max(
-            0,
-            anchorStart - maxDistance
-          );
-          rangeEnd = anchorStart;
-          break;
-
-        case "both":
-          rangeStart = Math.max(
-            0,
-            anchorStart - maxDistance
-          );
-          rangeEnd = Math.min(
-            state.text.length,
-            anchorEnd + maxDistance
-          );
-          break;
-
-        case "after":
-        default:
-          rangeStart = anchorEnd;
-          rangeEnd = Math.min(
-            state.text.length,
-            anchorEnd + maxDistance
-          );
-          break;
-      }
-
-      const segment = state.text.slice(
-        rangeStart,
-        rangeEnd
-      );
-
-      const result = patchSegment(
-        segment,
-        rule,
-      );
-
-      if (result.changed === 0) {
-        continue;
-      }
-
-      state.text =
-        state.text.slice(0, rangeStart) +
-        result.text +
-        state.text.slice(rangeEnd);
-    }
+    state.text = result.text;
   }
 }
 
-// patchPanelTitle
-function vuePatchPanelTitleRender(state, textMappings) {
-  const panelTitleMappings = textMappings.filter(m => m.patchPanelTitle);
-  if (panelTitleMappings.length === 0) return;
-
-  const panelTitleMapLiteral = vueMakeMapLiteral(panelTitleMappings);
-
-  // s("p",{class:e.$style["title"]},[e._v(e._s(t.title))])
-  const panelTitleRenderRegex =
-    /([A-Za-z_$][\w$]*)\("p",\{class:([A-Za-z_$][\w$]*)\.\$style\["title"\]\},\[\2\._v\(\2\._s\(([A-Za-z_$][\w$]*)\.title\)\)\]\)/g;
-
-  state.text = state.text.replace(panelTitleRenderRegex, (match, h, vm, panel) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, panelTitleMappings);
-
-    return `${h}("p",{class:${vm}.$style["title"]},[${vm}._v(${vm}._s((${panelTitleMapLiteral}[${panel}.title]||${panel}.title)))])`;
-  });
-}
-
-// patchSignalLocation
-function vuePatchSignalLocationRender(state, textMappings) {
-  const signalLocationMappings = textMappings.filter(m => m.patchSignalLocation);
-  if (signalLocationMappings.length === 0) return;
-
-  const signalLocationMapLiteral = vueMakeMapLiteral(signalLocationMappings);
-
-  // a("span",{staticClass:"city"},[
-  //   a("i",{staticClass:"dot"}),
-  //   e._v("\n            "+e._s(t.location)+"\n          ")
-  // ])
-  const signalLocationRenderRegex =
-    /([A-Za-z_$][\w$]*)\("span",\{staticClass:"city"\},\[\1\("i",\{staticClass:"dot"\}\),([A-Za-z_$][\w$]*)\._v\(("(?:(?:\\.|[^"\\])*)")\+\2\._s\(([A-Za-z_$][\w$]*)\.location\)\+("(?:(?:\\.|[^"\\])*)")\)\]\)/g;
-
-  state.text = state.text.replace(signalLocationRenderRegex, (match, h, vm, before, item, after) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, signalLocationMappings);
-
-    return `${h}("span",{staticClass:"city"},[${h}("i",{staticClass:"dot"}),${vm}._v(${before}+${vm}._s((${signalLocationMapLiteral}[${item}.location]||${item}.location))+${after})])`;
-  });
-}
-
-// patchPlayLinkTitle
-function vuePatchPlayLinkTitleRender(state, textMappings) {
-  const playLinkTitleMappings = textMappings.filter(m => m.patchPlayLinkTitle);
-  if (playLinkTitleMappings.length === 0) return;
-
-  const playLinkTitleMapLiteral = vueMakeMapLiteral(playLinkTitleMappings);
-
-  if (
-    !state.text.includes('staticClass:"play-link-list"') ||
-    !state.text.includes('play-link-item') ||
-    !state.text.includes('staticClass:"title"') ||
-    !state.text.includes('._s(t.title)')
-  ) {
-    return;
-  }
-
-  // s("p",{staticClass:"title"},[
-  //   e._v("\n              "+e._s(t.title)+"\n            ")
-  // ])
-  const playLinkTitleRenderRegex =
-    /([A-Za-z_$][\w$]*)\("p",\{staticClass:"title"\},\[\s*([A-Za-z_$][\w$]*)\._v\(("(?:(?:\\.|[^"\\])*)")\+\2\._s\(([A-Za-z_$][\w$]*)\.title\)\+("(?:(?:\\.|[^"\\])*)")\)\s*\]\)/g;
-
-  state.text = state.text.replace(playLinkTitleRenderRegex, (match, h, vm, before, item, after) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, playLinkTitleMappings);
-
-    return `${h}("p",{staticClass:"title"},[${vm}._v(${before}+${vm}._s((${playLinkTitleMapLiteral}[${item}.title]||${item}.title))+${after})])`;
-  });
-}
-
-// patchPlayTitleExpression
-function vuePatchPlayTitleExpression(state, textMappings) {
-  const playTitleExpressionMappings = textMappings.filter(m => m.patchPlayTitleExpression);
-  if (playTitleExpressionMappings.length === 0) return;
-
-  const playTitleExpressionMapLiteral = vueMakeMapLiteral(playTitleExpressionMappings);
-
-  if (
-    !state.text.includes("positionRespList") ||
-    !state.text.includes('staticClass:"enter"') ||
-    !state.text.includes('"enter-en"') ||
-    !state.text.includes(".subtitle") ||
-    !state.text.includes(".title")
-  ) {
-    return;
-  }
-
-  // 원본:
-  // e._s("en"===e.locale?t.subtitle:t.title)
-  const originalRe =
-    /([A-Za-z_$][\w$]*)\._s\(("en"===[A-Za-z_$][\w$]*\.locale\?[A-Za-z_$][\w$]*\.subtitle:([A-Za-z_$][\w$]*)\.title)\)/g;
-
-  state.text = state.text.replace(originalRe, (match, vm, expr, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, playTitleExpressionMappings);
-
-    return `${vm}._s("en"===${vm}.locale?${item}.subtitle:(${playTitleExpressionMapLiteral}[${item}.title]||${item}.title))`;
-  });
-
-  // 이미 한 번 잘못 패치된 경우 복구:
-  // e._s(({"旧map":...}["en"===e.locale?t.subtitle:t.title]||"en"===e.locale?t.subtitle:t.title))
-  const alreadyPatchedRe =
-    /([A-Za-z_$][\w$]*)\._s\(\(\{[^{}]*\}\[("en"===[A-Za-z_$][\w$]*\.locale\?[A-Za-z_$][\w$]*\.subtitle:([A-Za-z_$][\w$]*)\.title)\]\|\|\2\)\)/g;
-
-  state.text = state.text.replace(alreadyPatchedRe, (match, vm, expr, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, playTitleExpressionMappings);
-
-    return `${vm}._s("en"===${vm}.locale?${item}.subtitle:(${playTitleExpressionMapLiteral}[${item}.title]||${item}.title))`;
-  });
-}
-
-// PatchGameMapName
-function vuePatchGameMapName(state, textMappings) {
-  const gameMapMappings = textMappings.filter(m => m.patchGameMapName);
-  if (gameMapMappings.length === 0) return;
-
-  const gameMapMapLiteral = vueMakeMapLiteral(gameMapMappings);
-
-  if (
-    !state.text.includes('staticClass:"game-map"') ||
-    !state.text.includes(".gameMap")
-  ) {
-    return;
-  }
-
-  function mapExpr(expr) {
-    return `(${gameMapMapLiteral}[${expr}]||${gameMapMapLiteral}[String(${expr}).trim()]||${expr})`;
-  }
-
-  // 원본:
-  // s("span",{staticClass:"game-map"},[t._v(t._s(t.gameMap))])
-  const gameMapRegex1 =
-    /([A-Za-z_$][\w$]*)\("span",\{staticClass:"game-map"\},\[\s*([A-Za-z_$][\w$]*)\._v\(\2\._s\(([A-Za-z_$][\w$]*)\.gameMap\)\)\s*\]\)/g;
-
-  state.text = state.text.replace(gameMapRegex1, (match, h, vm, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, gameMapMappings);
-
-    const expr = `${item}.gameMap`;
-    return `${h}("span",{staticClass:"game-map"},[${vm}._v(${vm}._s(${mapExpr(expr)}))])`;
-  });
-
-  // 이미 예전 방식으로 패치된 경우 복구:
-  // s("span",{staticClass:"game-map"},[t._v(t._s(({"...":"..."}[t.gameMap]||t.gameMap)))])
-  const alreadyPatchedRegex1 =
-    /([A-Za-z_$][\w$]*)\("span",\{staticClass:"game-map"\},\[\s*([A-Za-z_$][\w$]*)\._v\(\2\._s\(\(\{[^{}]*\}\[([A-Za-z_$][\w$]*)\.gameMap\]\|\|\3\.gameMap\)\)\)\s*\]\)/g;
-
-  state.text = state.text.replace(alreadyPatchedRegex1, (match, h, vm, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, gameMapMappings);
-
-    const expr = `${item}.gameMap`;
-    return `${h}("span",{staticClass:"game-map"},[${vm}._v(${vm}._s(${mapExpr(expr)}))])`;
-  });
-
-  // 혹시 공백 문자열이 붙은 형태:
-  // s("span",{staticClass:"game-map"},[t._v(" "+t._s(t.gameMap))])
-  const gameMapRegex2 =
-    /([A-Za-z_$][\w$]*)\("span",\{staticClass:"game-map"\},\[\s*([A-Za-z_$][\w$]*)\._v\(("(?:(?:\\.|[^"\\])*)")\+\2\._s\(([A-Za-z_$][\w$]*)\.gameMap\)\)\s*\]\)/g;
-
-  state.text = state.text.replace(gameMapRegex2, (match, h, vm, before, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(state.rel, gameMapMappings);
-
-    const expr = `${item}.gameMap`;
-    return `${h}("span",{staticClass:"game-map"},[${vm}._v(${before}+${vm}._s(${mapExpr(expr)}))])`;
-  });
-}
-
-// vuePatchRelativeTimeText, 친구 추가 탭의 ~분전 패치
+// vuePatch"RelativeTimeText" 패치
 function vuePatchRelativeTimeText(state) {
   if (
     !state.text.includes(".timeLine(") ||
@@ -946,6 +626,7 @@ function vuePatchRelativeTimeText(state) {
     return;
   }
 
+  // 친구 추가 탭의 ~분전 패치
   const helper =
     `(function(v){` +
     `v=String(v==null?"":v).trim();` +
@@ -971,7 +652,7 @@ function vuePatchRelativeTimeText(state) {
   });
 }
 
-// Main Vue text patcher
+// Vue 텍스트 통합 패치
 function patchVueTextContext(files, mappings) {
   const textMappings = mappings.filter(m => m.type === "text");
 
@@ -993,15 +674,12 @@ function patchVueTextContext(files, mappings) {
       changed: 0,
       total: 0
     };
+    
     vuePatchRegexRules(state, mappings);
     vuePatchLiteralRules(state, textMappings);
-
-    vuePatchPanelTitleRender(state, textMappings); // 통합
-    vuePatchSignalLocationRender(state, textMappings); // 통합
-    vuePatchPlayLinkTitleRender(state, textMappings); // 통합
-    vuePatchPlayTitleExpression(state, textMappings); // 통합
-    vuePatchGameMapName(state, textMappings); // 통합
+    patchVueRenderRules(state, mappings, log); // patcher_renders.js
     vuePatchRelativeTimeText(state);
+
     if (state.changed > 0) {
       writeText(full, state.text);
       total += state.total;
@@ -1011,70 +689,7 @@ function patchVueTextContext(files, mappings) {
   log(`[summary:vue-text-context] changed=${total}`);
 }
 
-// patchCustomerCenterDynamicText
-function patchCustomerCenterDynamicText(files, dynamicRules = []) {
-  function toUnicodeEscapedJsString(str) {
-    return `"${str
-      .split("")
-      .map(ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"))
-      .join("")}"`;
-  }
-
-  function makeMapLiteral(mappings) {
-    return `{${mappings
-      .map(([zh, ko]) => `${toUnicodeEscapedJsString(zh)}:${JSON.stringify(ko)}`)
-      .join(",")}}`;
-  }
-
-  let total = 0;
-
-  for (const full of files) {
-    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
-
-    let text;
-    try {
-      text = readText(full);
-    } catch {
-      continue;
-    }
-
-    let changed = 0;
-
-    for (const rule of dynamicRules) {
-      const mapLiteral = makeMapLiteral(rule.mappings);
-      const pathRe = rule.objectPath.replace(/\./g, "\\.");
-
-      // e._s(e.categoryInfo.entryTitle)
-      // t._s(t.categoryInfo.entryTitle)
-      // n._s(n.categoryInfo.propagandaTitle)
-      // 앞 변수명과 뒤 변수명이 같은 경우만 잡음
-      const re = new RegExp(
-        `([A-Za-z_$][\\w$]*)\\._s\\(\\1\\.${pathRe}\\)`,
-        "g"
-      );
-
-      text = text.replace(re, (match, vm) => {
-        changed++;
-        total++;
-
-        for (const [zh, ko] of rule.mappings) {
-          log(`[${rel}] ${zh} -> ${ko}`);
-        }
-
-        const expr = `${vm}.${rule.objectPath}`;
-        return `${vm}._s((${mapLiteral}[${expr}]||${expr}))`;
-      });
-    }
-
-    if (changed > 0) {
-      writeText(full, text);
-    }
-  }
-
-  log(`[summary:customer-center-dynamic-text] changed=${total}`);
-}
-
-// 문자열 전체가 정확히 일치할 때만 매핑
+// 문자열 완전일치 패치
 function patchStaticStringMappings(files, mappings = []) {
   const staticDebug = createStaticMappingDebugSession({
     enabled: DEBUG_MODE,
@@ -1083,6 +698,17 @@ function patchStaticStringMappings(files, mappings = []) {
     unpackedDir: UNPACKED_DIR,
     readText,
     log
+  });
+
+  const compiledMappings = mappings.map((mapping, index) => {
+    const [zh, ko] = mapping;
+    const z = escapeRegExp(zh);
+    return {
+      zh,
+      ko,
+      re: new RegExp(`(["'\`])${z}\\1`, "g"),
+      originalIndex: index // 디버그 세션 기록용 원래 인덱스 유지
+    };
   });
 
   let total = 0;
@@ -1099,17 +725,14 @@ function patchStaticStringMappings(files, mappings = []) {
 
     let changed = 0;
 
-    for (let i = 0; i < mappings.length; i++) {
-      const [zh, ko] = mappings[i];
-      const z = escapeRegExp(zh);
-
-      const re = new RegExp(`(["'\`])${z}\\1`, "g");
+    for (let i = 0; i < compiledMappings.length; i++) {
+      const { zh, ko, re, originalIndex } = compiledMappings[i];
 
       text = text.replace(re, (match, quote) => {
         changed++;
         total++;
 
-        staticDebug.record(rel, i, 1);
+        staticDebug.record(rel, originalIndex, 1);
 
         log(`[${rel}] ${zh} -> ${ko}`);
         return `${quote}${ko}${quote}`;
@@ -1213,11 +836,6 @@ function applyPatches() {
     patchData.vueMappings
   );
 
-  patchCustomerCenterDynamicText(
-    files,
-    patchData.dynamicRules
-  );
-
   patchStaticStringMappings(
     files,
     patchData.staticMappings
@@ -1279,7 +897,7 @@ async function main() {
     console.error("");
     console.error("[error]", err.message);
     console.error("");
-    console.error("이 오류를 발견하셨다면 Midori 개발자에게 제보해 주세요!");
+    console.error("이 오류를 발견하셨다면 개발자 Midori에게 제보해 주세요!");
     console.error(BACKUP_ASAR);
     process.exit(1);
   }

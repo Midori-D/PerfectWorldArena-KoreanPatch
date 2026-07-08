@@ -64,3 +64,23 @@ This patch is not officially authorized, so please use it only after fully under
 ## 📄 라이센스 / License
 
 * MIT
+
+## 💗 프로젝트 후원 / Support the Project
+
+**PerfectWorldArena-KoreanPatch**는  
+완미세계 경기 플랫폼의 일부 UI를 한국어로 번역하는 비공식 사용자 패치입니다.
+
+번역 보완, 업데이트 대응, 패치 안정화 작업을 응원해 주시면  
+프로젝트를 꾸준히 유지하는 데 큰 도움이 됩니다.
+
+<p align="center">
+  <a href="https://github.com/sponsors/Midori-D">
+    <img
+      src="https://img.shields.io/badge/GitHub%20Sponsors-후원하기-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white"
+      alt="GitHub Sponsors"
+    />
+  </a>
+</p>
+
+> 후원은 선택 사항입니다.  
+> 별 ⭐ 하나와 오류 제보도 프로젝트에 큰 도움이 됩니다.

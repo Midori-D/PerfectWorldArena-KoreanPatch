@@ -480,6 +480,231 @@ function vuePatchCustomerCenterDynamicText(
   }
 }
 
+// patchMapSelectName
+function vuePatchMapSelectName(
+  state,
+  textMappings,
+  log
+) {
+  const mapSelectMappings = textMappings.filter(
+    mapping =>
+      mapping.patchMapSelectName === true &&
+      typeof mapping.zh === "string" &&
+      typeof mapping.ko === "string"
+  );
+
+  if (mapSelectMappings.length === 0) {
+    return;
+  }
+
+  // 맵 선택 창에서 사용하는 Vue 필터
+  if (!state.text.includes('._f("mapName")(')) {
+    return;
+  }
+
+  const mapLiteral = vueMakeMapLiteral(
+    mapSelectMappings
+  );
+
+  function mapExpr(expr) {
+    return (
+      `(${mapLiteral}[${expr}]||` +
+      `${mapLiteral}[String(${expr}).trim()]||` +
+      `${expr})`
+    );
+  }
+
+  /*
+   * 원본:
+   * e._s(e._f("mapName")(t["name_"+e.locale]))
+   *
+   * 또는:
+   * e._s(
+   *   e._f("mapName")(
+   *     e.currentLuckyMap["name_"+e.locale]
+   *   )
+   * )
+   */
+  const mapSelectNameRegex =
+    /([A-Za-z_$][\w$]*)\._s\(\1\._f\("mapName"\)\(([^()]+)\)\)/g;
+
+  state.text = state.text.replace(
+    mapSelectNameRegex,
+    (match, vm, sourceExpr) => {
+      state.changed++;
+      state.total++;
+
+      vueLogMappings(
+        log,
+        state.rel,
+        mapSelectMappings
+      );
+
+      const filteredExpr =
+        `${vm}._f("mapName")(${sourceExpr})`;
+
+      return (
+        `${vm}._s(` +
+        `${mapExpr(filteredExpr)}` +
+        `)`
+      );
+    }
+  );
+}
+
+// patchServerLocationName
+function vuePatchServerLocationName(
+  state,
+  textMappings,
+  log
+) {
+  const serverLocationMappings =
+    textMappings.filter(
+      mapping =>
+        mapping.patchServerLocationName === true &&
+        typeof mapping.zh === "string" &&
+        typeof mapping.ko === "string"
+    );
+
+  if (serverLocationMappings.length === 0) {
+    return;
+  }
+
+  // 원본 코드에 이 필터가 없으면 처리하지 않음
+  if (
+    !state.text.includes(
+      '._f("returnServerLocle")('
+    )
+  ) {
+    return;
+  }
+
+  const mapLiteral = vueMakeMapLiteral(
+    serverLocationMappings
+  );
+
+  function mapExpr(expr) {
+    return (
+      `(${mapLiteral}[${expr}]||` +
+      `${mapLiteral}[String(${expr}).trim()]||` +
+      `${expr})`
+    );
+  }
+
+  /*
+   * 원본:
+   *
+   * e._s(
+   *   e._f("returnServerLocle")(
+   *     t.location,
+   *     e.locale
+   *   )
+   * )
+   */
+  const serverLocationRegex =
+    /([A-Za-z_$][\w$]*)\._s\(\1\._f\("returnServerLocle"\)\(([^()]*)\)\)/g;
+
+  state.text = state.text.replace(
+    serverLocationRegex,
+    (match, vm, filterArgs) => {
+      state.changed++;
+      state.total++;
+
+      vueLogMappings(
+        log,
+        state.rel,
+        serverLocationMappings
+      );
+
+      const filteredExpr =
+        `${vm}._f("returnServerLocle")` +
+        `(${filterArgs})`;
+
+      return (
+        `${vm}._s(` +
+        `${mapExpr(filteredExpr)}` +
+        `)`
+      );
+    }
+  );
+}
+
+// 변수 포함 템플릿 문자열 패치
+function vuePatchVariableText(state, mappings, log) {
+  const rules = mappings.filter(
+    rule =>
+      rule &&
+      rule.type === "variableText" &&
+      rule.profile === "template" &&
+      Array.isArray(rule.source) &&
+      Array.isArray(rule.target)
+  );
+
+  if (rules.length === 0 || !state.text.includes("${")) {
+    return;
+  }
+
+  for (const rule of rules) {
+    let variableIndex = 0;
+    const variableNames = [];
+
+    const sourcePattern = rule.source
+      .map(part => {
+        const match = /^\$\{var(\d+)\}$/.exec(part);
+
+        if (match) {
+          variableNames.push(`var${match[1]}`);
+          return `(\\$\\{(?:[^{}]|\\{[^{}]*\\})+\\})\\s*`;
+        }
+
+        return `${escapeRegExp(part)}\\s*`;
+      })
+      .join("");
+
+    const prefixPattern = rule.anchor
+      ? `(${escapeRegExp(rule.anchor)}\\s*:\\s*\`)`
+      : "(`)";
+
+    const re = new RegExp(
+      prefixPattern + sourcePattern + "(`)",
+      "g"
+    );
+
+    state.text = state.text.replace(re, (...args) => {
+      const prefix = args[1];
+      const variables = args.slice(2, 2 + variableNames.length);
+      const suffix = args[2 + variableNames.length];
+
+      const variableMap = {};
+
+      variableNames.forEach((name, index) => {
+        variableMap[name] = variables[index];
+      });
+
+      const result = rule.target
+        .map(part => {
+          const match = /^\$\{var(\d+)\}$/.exec(part);
+
+          if (match) {
+            return variableMap[`var${match[1]}`] || "";
+          }
+
+          return part;
+        })
+        .join("");
+
+      state.changed++;
+      state.total++;
+
+      log(
+        `[${state.rel}] variableText ${rule.name || "template"}`
+      );
+
+      return prefix + result + suffix;
+    });
+  }
+}
+
 function patchVueRenderRules(
   state,
   mappings,
@@ -528,9 +753,27 @@ function patchVueRenderRules(
     log
   );
 
+  vuePatchMapSelectName(
+    state,
+    mappings,
+    log
+  );
+
+  vuePatchServerLocationName(
+    state,
+    mappings,
+    log
+  );
+
   vuePatchCustomerCenterDynamicText(
     state,
     dynamicRules,
+    log
+  );
+
+  vuePatchVariableText(
+    state,
+    mappings,
     log
   );
 }

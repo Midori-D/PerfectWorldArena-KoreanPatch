@@ -20,11 +20,11 @@ echo Running...
 
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('관리자 권한이 필요합니다.`napply_patch.bat을 우클릭한 뒤 ''관리자 권한으로 실행''을 선택해 주세요.', 'Perfect World Arena Korean Patch', 'OK', 'Warning')"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('관리자 권한이 필요합니다.`n%~nx0을 우클릭한 뒤 ''관리자 권한으로 실행''을 선택해 주세요.', 'Perfect World Arena Korean Patch', 'OK', 'Warning')"
   color 0C
   echo.
   echo [error] 관리자 권한이 필요합니다.
-  echo apply_patch.bat을 우클릭한 뒤 "관리자 권한으로 실행"을 선택해 주세요.
+  echo %~nx0을 우클릭한 뒤 "관리자 권한으로 실행"을 선택해 주세요.
   echo.
   pause
   exit /b 1
@@ -102,7 +102,7 @@ echo   패치가 완료되었습니다!
 echo ============================================================
 echo.
 echo [안내]
-echo 1. 이 폴더는 이제 삭제하셔도 좋습니다.
+echo 1. 향후 번역 데이터 업데이트를 위해 이 폴더를 보관해 주세요.
 echo 2. 패치된 app.asar는 설치 폴더에 백업된 app.asar.backup으로 복구할 수 있습니다.
 echo 3. 즐거운 게임 되세요!
 powershell -NoProfile -Command "Write-Host 'Created by Midori, Team Ataks' -ForegroundColor Magenta"

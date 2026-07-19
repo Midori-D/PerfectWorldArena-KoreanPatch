@@ -1,6 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const { createRequire } = require("node:module");
+const { patchVueRules } = require("./patcher_vue.js");
+const { compileTargetsRules, patchTargetsRules, } = require("./patcher_targets.js");
+const { debugCheckPatchMappings, createStaticMappingDebugSession, } = require("./patcher_debug.js");
+const { runUpdateFlow } = require("./patcher_update.js");
+const PATCHER_VERSION = "1.0.0";
+
+const DEBUG_MODE = process.argv.includes("--debug");
 
 const PATCHER_DIR = __dirname;
 const ROOT_DIR = path.resolve(PATCHER_DIR, "..");
@@ -26,14 +33,6 @@ try {
   console.error("이 오류를 발견하셨다면 개발자 Midori에게 제보해 주세요!");
   throw err;
 }
-
-// debug
-const DEBUG_MODE = process.argv.includes("--debug");
-const {
-  debugCheckPatchMappings,
-  createStaticMappingDebugSession,
-} = require("./patcher_debug.js");
-const { patchVueRenderRules } = require("./patcher_renders.js");
 
 // paw_path.txt
 const PATH_FILE = path.join(ROOT_DIR, "pwa_path.txt");
@@ -104,6 +103,7 @@ const REMAIN_PATH = path.join(LOG_DIR, `remaining_log_${nowTag}.txt`);
 const logs = [];
 const remains = [];
 
+// Tools
 function log(line) {
   logs.push(line);
   console.log(line);
@@ -226,7 +226,6 @@ function replaceOriginal() {
   log(`[replace] ${PATCHED_ASAR} -> ${APP_ASAR}`);
 }
 
-// Core
 function shouldSkip(full) {
   return (
     full.includes(`${path.sep}node_modules${path.sep}`) ||
@@ -328,7 +327,8 @@ function loadPatchData() {
   const staticData = loadJsonFile("static.json");
   const vueData = loadJsonFile("vue.json");
   const imageData = loadJsonFile("images.json");
-  const eventData = loadJsonFile("event.json");
+  const eventData = loadJsonFile("events.json");
+  const targetData = loadJsonFile("targets.json");
 
   const staticMappings = (staticData.mappings || []).map((item) => [
     item.zh,
@@ -348,6 +348,10 @@ function loadPatchData() {
       regex: new RegExp(item.regex, item.regexFlags || "g"),
     };
   });
+  
+  const targetsMappings = compileTargetsRules(
+    targetData.mappings || [],
+  );
 
   const inlineImageMappings = (imageData.inlineBase64 || []).map((item) => ({
     label: item.label || item.name,
@@ -371,249 +375,54 @@ function loadPatchData() {
     }),
   );
 
+  const remoteImageRedirects = (imageData.remoteImageRedirects || []).map(
+    (item) => {
+      const asset = String(item.asset || "");
+      const target = String(item.target || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "");
+
+      return {
+        label: item.label || asset || item.fromUrl || "remote image",
+        fromUrl: String(item.fromUrl || ""),
+        asset,
+        from: asset ? path.join(ASSETS_DIR, asset) : "",
+        target,
+        to: path.join(
+          UNPACKED_DIR,
+          ...target.split("/").filter(Boolean),
+        ),
+      };
+    },
+  );
+
   log(
     `[mapping] static=${staticData.version}, ` +
       `vue=${vueData.version}, ` +
       `images=${imageData.version}, ` +
-      `event=${eventData.version}`,
+      `event=${eventData.version}, ` +
+      `targets=${targetData.version}`,
   );
 
   return {
     staticMappings,
     vueMappings,
+    targetsMappings,
     inlineImageMappings,
     imageAssetReplacements,
+    remoteImageRedirects,
   };
 }
 
-// Vue text patch helpers
-function vueToUnicodeEscapeLower(str) {
-  return str
-    .split("")
-    .map((ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"))
-    .join("");
-}
-
-function vueToUnicodeEscapeUpper(str) {
-  return str
-    .split("")
-    .map(
-      (ch) =>
-        "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0").toUpperCase(),
-    )
-    .join("");
-}
-
-// vuePatch*Regex* 패치
-function vuePatchRegexRules(state, mappings) {
-  const rules = mappings.filter(
-    (item) => item.type === "regex" && item.profile,
-  );
-
-  if (rules.length === 0) return;
-
-  for (const rule of rules) {
-    switch (rule.profile) {
-      // "profile": "enum" 번역, [e.key]&#58; "zh"
-      case "enum": {
-        if (!rule.key || !rule.zh || !rule.ko) {
-          break;
-        }
-
-        const regexList = [
-          makeEnumRegex(rule.key, rule.zh),
-          makeDirectKeyRegex(rule.key, rule.zh),
-        ];
-
-        for (const re of regexList) {
-          state.text = state.text.replace(re, (match, prefix, quote) => {
-            state.changed++;
-            state.total++;
-
-            log(
-              `[${state.rel}] Regex, profile:${rule.profile} ` +
-                `${rule.zh} -> ${rule.ko}`,
-            );
-
-            return `${prefix}${quote}` + `${rule.ko}` + `${quote}`;
-          });
-        }
-
-        break;
-      }
-
-      // "profile": "context" 번역, `${prefix(regex)}${rule.to}${suffix(regex)}`
-      case "context": {
-        if (!(rule.regex instanceof RegExp) || !rule.to) {
-          break;
-        }
-
-        const re = new RegExp(rule.regex.source, rule.regex.flags);
-
-        state.text = state.text.replace(re, (match, prefix, suffix) => {
-          state.changed++;
-          state.total++;
-
-          log(
-            `[${state.rel}] Regex, profile:${rule.profile} ` +
-              `${rule.from || "context"} -> ${rule.to}`,
-          );
-
-          return `${prefix}${rule.to}${suffix}`;
-        });
-
-        break;
-      }
-
-      // "profile": "blacklistCount" 번역, '"\n                黑名单 ("'
-      case "blacklistCount": {
-        if (!rule.zh || !rule.ko) {
-          break;
-        }
-
-        const zh = escapeRegExp(rule.zh);
-
-        const re = new RegExp(
-          `(\\._v\\(\\s*["'\`]` + `(?:(?:\\\\[nrt])|\\s)*)` + `${zh}`,
-          "g",
-        );
-
-        state.text = state.text.replace(re, (match, prefix) => {
-          state.changed++;
-          state.total++;
-
-          log(
-            `[${state.rel}] Regex, profile:${rule.profile} ` +
-              `${rule.zh} -> ${rule.ko}`,
-          );
-
-          return `${prefix}${rule.ko}`;
-        });
-
-        break;
-      }
-
-      default:
-        break;
-    }
-  }
-}
-
-// vuePatch*Literal* 패치
-function vuePatchLiteralRules(state, textMappings) {
-  // "patchLiteral": true 번역, "\n      {rule.to}\n    "
-  const rules = textMappings.filter(
-    (item) => item.patchLiteral === true && item.zh && item.ko,
-  );
-
-  if (rules.length === 0) return;
-
-  const ws = String.raw`(?:(?:\\[nrt])|\s)*`;
-
-  function makeVariants(zh, ko) {
-    const variants = [
-      {
-        from: zh,
-        to: ko,
-      },
-      {
-        from: vueToUnicodeEscapeLower(zh),
-        to: vueToUnicodeEscapeLower(ko),
-      },
-      {
-        from: vueToUnicodeEscapeUpper(zh),
-        to: vueToUnicodeEscapeUpper(ko),
-      },
-    ];
-
-    return variants.filter(
-      (item, index, array) =>
-        item.from &&
-        array.findIndex((other) => other.from === item.from) === index,
-    );
-  }
-
-  function patchSegment(segment, rule) {
-    let changed = 0;
-
-    const variants = makeVariants(rule.zh, rule.ko);
-
-    for (const { from, to } of variants) {
-      const escaped = escapeRegExp(from);
-
-      const targetRe = new RegExp(
-        `(["'\`])` + `(${ws})` + `${escaped}` + `(${ws})` + `\\1`,
-        "g",
-      );
-
-      segment = segment.replace(targetRe, (match, quote, before, after) => {
-        changed++;
-        state.changed++;
-        state.total++;
-
-        log(`[${state.rel}] Text, patchLiteral ` + `${rule.zh} -> ${rule.ko}`);
-
-        return `${quote}${before}` + `${to}${after}${quote}`;
-      });
-    }
-
-    return {
-      text: segment,
-      changed,
-    };
-  }
-
-  for (const rule of rules) {
-    const result = patchSegment(state.text, rule);
-
-    state.text = result.text;
-  }
-}
-
-// vuePatch"RelativeTimeText" 패치
-function vuePatchRelativeTimeText(state) {
-  if (
-    !state.text.includes(".timeLine(") ||
-    !state.text.includes("$style.stTime")
-  ) {
-    return;
-  }
-
-  // 친구 추가 탭의 ~분전 패치
-  const helper =
-    `(function(v){` +
-    `v=String(v==null?"":v).trim();` +
-    `return v` +
-    `.replace(/^(\\d+)天前$/,"$1일 전")` +
-    `.replace(/^(\\d+)分钟前$/,"$1분 전")` +
-    `.replace(/^(\\d+)小时前$/,"$1시간 전")` +
-    `.replace(/^刚刚$/,"방금 전");` +
-    `})`;
-
-  const re = /([A-Za-z_$][\w$]*)\._s\(\1\.timeLine\(([^()]+?)\)\)/g;
-
-  state.text = state.text.replace(re, (match, vm, arg) => {
-    if (match.includes("function(v)")) return match;
-
-    state.changed++;
-    state.total++;
-
-    log(`[${state.rel}] 친구 추가 탭 시간 텍스트 패치 완료`);
-
-    return `${vm}._s(${helper}(${vm}.timeLine(${arg})))`;
-  });
-}
-
-// Vue 텍스트 통합 패치
+// Vue 통합 패치
 function patchVueTextContext(files, mappings) {
-  const textMappings = mappings.filter((m) => m.type === "text");
-
   let total = 0;
 
   for (const full of files) {
     const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
 
     let text;
+
     try {
       text = readText(full);
     } catch {
@@ -627,10 +436,7 @@ function patchVueTextContext(files, mappings) {
       total: 0,
     };
 
-    vuePatchRegexRules(state, mappings);
-    vuePatchLiteralRules(state, textMappings);
-    vuePatchRelativeTimeText(state);
-    patchVueRenderRules(state, mappings, log); // patcher_renders.js
+    patchVueRules(state, mappings, log);
 
     if (state.changed > 0) {
       writeText(full, state.text);
@@ -639,6 +445,46 @@ function patchVueTextContext(files, mappings) {
   }
 
   log(`[summary:vue-text-context] changed=${total}`);
+}
+
+// Targets 통합 패치
+function patchTargetsTextContext(files, mappings) {
+  let total = 0;
+
+  for (const full of files) {
+    // 대상은 JavaScript 파일로 한정
+    if (!/\.js$/i.test(full)) {
+      continue;
+    }
+
+    const rel = path
+      .relative(UNPACKED_DIR, full)
+      .replaceAll("\\", "/");
+
+    let text;
+
+    try {
+      text = readText(full);
+    } catch {
+      continue;
+    }
+
+    const state = {
+      text,
+      rel,
+      changed: 0,
+      total: 0,
+    };
+
+    patchTargetsRules(state, mappings, log);
+
+    if (state.changed > 0) {
+      writeText(full, state.text);
+      total += state.total;
+    }
+  }
+
+  log(`[summary:targets-text-context] changed=${total}`);
 }
 
 // 문자열 완전일치 패치
@@ -659,7 +505,7 @@ function patchStaticStringMappings(files, mappings = []) {
       zh,
       ko,
       re: new RegExp(`(["'\`])${z}\\1`, "g"),
-      originalIndex: index, // 디버그 세션 기록용 원래 인덱스 유지
+      originalIndex: index, // debug
     };
   });
 
@@ -700,7 +546,7 @@ function patchStaticStringMappings(files, mappings = []) {
   staticDebug.finish(files);
 }
 
-// Base64로 인코딩된 이미지 패치
+// Base64 이미지 패치
 function patchInlineBase64Images(files, imageMappings = []) {
   let total = 0;
 
@@ -753,10 +599,119 @@ function patchInlineBase64Images(files, imageMappings = []) {
     }
   }
 
-  log(`[summary:inline-base64-images] changed=${total}`);
+  log(`[Summary:base64-images] changed=${total}`);
 }
 
-// 이미지 에셋 패치
+// 서버 이미지 패치
+function patchRemoteImageRedirects(files, imageMappings = []) {
+  const readyMappings = [];
+
+  for (const item of imageMappings) {
+    if (!item.fromUrl) {
+      log(`[skip:remote-image] fromUrl missing: ${item.label}`);
+      continue;
+    }
+
+    if (!item.target) {
+      log(`[skip:remote-image] target missing: ${item.label}`);
+      continue;
+    }
+
+    if (!item.from || !fs.existsSync(item.from)) {
+      log(`[skip:remote-image] asset missing: ${item.from}`);
+      continue;
+    }
+
+    readyMappings.push(item);
+  }
+
+  if (readyMappings.length === 0) {
+    log(`[summary:remote-image-redirects] changed=0, assets=0`);
+    return;
+  }
+
+  const redirectMap = Object.fromEntries(
+    readyMappings.map((item) => [item.fromUrl, item.target]),
+  );
+
+  const redirectMapLiteral = JSON.stringify(redirectMap);
+
+  const propImageRegex =
+    /propImage\(\)\s*\{\s*return\s+this\.propInfo\.customData\.image\s*\?\s*this\.propInfo\.customData\.image\s*:\s*this\.propInfo\.itemImage\s*;?\s*\}/g;
+
+  let changed = 0;
+
+  for (const full of files) {
+    if (!/\.js$/i.test(full)) continue;
+
+    const rel = path.relative(UNPACKED_DIR, full).replaceAll("\\", "/");
+
+    let text;
+    try {
+      text = readText(full);
+    } catch {
+      continue;
+    }
+
+    if (!text.includes("propImage") || !text.includes("prop-image")) {
+      continue;
+    }
+
+    let fileChanged = 0;
+
+    text = text.replace(propImageRegex, () => {
+      fileChanged++;
+      changed++;
+
+      return (
+        `propImage() {` +
+        `const image=this.propInfo.customData.image` +
+        `?this.propInfo.customData.image` +
+        `:this.propInfo.itemImage;` +
+        `const redirects=${redirectMapLiteral};` +
+        `return redirects[image]` +
+        `?s.p+redirects[image]` +
+        `:image;` +
+        `}`
+      );
+    });
+
+    if (fileChanged > 0) {
+      writeText(full, text);
+
+      for (const item of readyMappings) {
+        log(
+          `[${rel}] Remote image, ` +
+            `${item.fromUrl} -> ${item.target}`,
+        );
+      }
+    }
+  }
+
+  if (changed === 0) {
+    log(`[warn:remote-image] propImage() target not found`);
+    log(`[summary:remote-image-redirects] changed=0, assets=0`);
+    return;
+  }
+
+  let copied = 0;
+
+  for (const item of readyMappings) {
+    ensureDir(path.dirname(item.to));
+    fs.copyFileSync(item.from, item.to);
+
+    copied++;
+
+    log(`[remote-image:asset] ${item.label} -> ${item.target}`);
+  }
+
+  log(
+    `[summary:remote-image-redirects] ` +
+      `changed=${changed}, assets=${copied}`,
+  );
+}
+
+// 이미지 패치
 function patchImageAssets(imageMappings = []) {
   let total = 0;
 
@@ -777,7 +732,7 @@ function patchImageAssets(imageMappings = []) {
     log(`[image] ${item.label} -> patched`);
   }
 
-  log(`[summary:image-assets] changed=${total}`);
+  log(`[Summary:image-assets] changed=${total}`);
 }
 
 function applyPatches() {
@@ -785,11 +740,10 @@ function applyPatches() {
   const patchData = loadPatchData();
 
   patchVueTextContext(files, patchData.vueMappings);
-
+  patchTargetsTextContext(files, patchData.targetsMappings);
   patchStaticStringMappings(files, patchData.staticMappings);
-
   patchInlineBase64Images(files, patchData.inlineImageMappings);
-
+  patchRemoteImageRedirects(files, patchData.remoteImageRedirects);
   patchImageAssets(patchData.imageAssetReplacements);
 
   debugCheckPatchMappings(files, {
@@ -822,6 +776,17 @@ function saveLogs() {
 
 async function main() {
   try {
+    const updateResult = await runUpdateFlow({
+      rootDir: ROOT_DIR,
+      currentPatcherVersion: PATCHER_VERSION,
+      log,
+      warn: log,
+    });
+
+    if (!updateResult.canContinue) {
+      throw new Error("최신 패처로 업데이트한 뒤 다시 실행해 주세요.");
+    }
+
     checkEnvironment();
     prepareWorkDir();
     backupOriginalAsar();

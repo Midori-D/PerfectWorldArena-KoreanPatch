@@ -1,9 +1,9 @@
 {
   "manifestVersion": 1,
-  "mappingVersion": "2026.07.04.1",
+  "mappingVersion": "2026.07.20.1",
   "minimumPatcherVersion": "1.0.0",
   "latestPatcherVersion": "1.0.0",
-  "message": "번역 데이터가 최신 상태입니다.",
+  "message": "2026.07.20 완미세계 업데이트 대응 번역 데이터입니다.",
   "files": {
     "static": {
       "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/static.json",
@@ -12,6 +12,18 @@
     "vue": {
       "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/vue.json",
       "path": "mappings/vue.json"
+    },
+    "images": {
+      "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/images.json",
+      "path": "mappings/images.json"
+    },
+    "targets": {
+      "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/targets.json",
+      "path": "mappings/targets.json"
+    },
+    "events": {
+      "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/events.json",
+      "path": "mappings/events.json"
     }
   }
 }

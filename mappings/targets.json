@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.07.20.1",
+  "mappings": [
+    {
+      "section": "PAC 보상 페이지",
+      "label": "획득 점수 단위",
+      "anchor": "curInfo.score",
+      "from": "分",
+      "to": "점",
+      "before": "\\.curInfo\\.score\\)\\s*\\+\\s*[\"']",
+      "after": "[\"']\\s*\\)",
+      "pathRegex": "\\.js$",
+      "maxMatchesPerFile": 1
+    },
+    {
+        "section": "PAC 보상 페이지",
+        "label": "획득 별 단위",
+        "anchor": "curInfo.star",
+        "from": "星",
+        "to": "별",
+        "before": "\\.curInfo\\.star\\)\\s*\\+\\s*[\"']",
+        "after": "[\"']\\s*\\)",
+        "pathRegex": "\\.js$",
+        "maxMatchesPerFile": 1
+    }
+  ]
+}

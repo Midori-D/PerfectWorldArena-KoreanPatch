@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "2026.07.04.1",
+  "version": "2026.07.20.1",
   "inlineBase64": [
     {
       "label": "마우스 오버 시 보이는 프로필",
@@ -27,6 +27,7 @@
       "asset": "data-v-7db9eb06.png"
     }
   ],
+
   "assetReplacements": [
     {
       "label": "런처 실행 페이지 스팀 로그인 아이콘",
@@ -39,39 +40,42 @@
       "target": "static/img/icon_undetected.2d4102e1.png"
     },
     {
-      "label": "정의 평가단 이벤트 배너",
-      "asset": "justice.e15ebd35.png",
-      "target": "static/img/justice.e15ebd35.png"
+      "label": "아이템 탭 없음 아이콘",
+      "asset": "bg_empty.9da326e6.png",
+      "target": "static/img/bg_empty.9da326e6.png"
+    }
+  ],
+  
+  "remoteImageRedirects": [
+    {
+      "label": "닉네임 변경권 이미지",
+      "fromUrl": "https://img.wmpvp.com/pvp/c7/78/c7786cff4c8c030f96292cda6ce42ebb1772442690.webp",
+      "asset": "c7786cff4c8c030f96292cda6ce42ebb1772442690.webp",
+      "target": "static/img/c7786cff4c8c030f96292cda6ce42ebb1772442690.webp"
     },
     {
-      "label": "메인 화면 공식서버 아이콘",
-      "asset": "gf.ca1c9e7d.svg",
-      "target": "static/img/gf.ca1c9e7d.svg"
+      "label": "완미 하이라이트권 이미지",
+      "fromUrl": "https://img.wmpvp.com/pvp/48/43/48430157529517e38668e0f7f68d7dc51623285404.png",
+      "asset": "48430157529517e38668e0f7f68d7dc51623285404.png",
+      "target": "static/img/48430157529517e38668e0f7f68d7dc51623285404.png"
     },
     {
-      "label": "메인 화면 공식서버 아이콘 클릭",
-      "asset": "gf-hover.8f4ccfe3.svg",
-      "target": "static/img/gf-hover.8f4ccfe3.svg"
+      "label": "랭크 2배권 이미지",
+      "fromUrl": "https://img.wmpvp.com/pvp/62/62/6262c4ad0d9a9cc2d3f666abca48ca991780392859.webp",
+      "asset": "6262c4ad0d9a9cc2d3f666abca48ca991780392859.webp",
+      "target": "static/img/6262c4ad0d9a9cc2d3f666abca48ca991780392859.webp"
     },
     {
-      "label": "녹색 아이콘",
-      "asset": "green6.db86ef26.svg",
-      "target": "static/img/green6.db86ef26.svg"
+      "label": "ROLL 행운권 이미지",
+      "fromUrl": "https://img.wmpvp.com/pvp/d5/1a/d51a2fefd1841df29ead03c326e94d241780042468.webp",
+      "asset": "d51a2fefd1841df29ead03c326e94d241780042468.webp",
+      "target": "static/img/d51a2fefd1841df29ead03c326e94d241780042468.webp"
     },
     {
-      "label": "녹색 아이콘 2",
-      "asset": "green6.h.19933a7a.svg",
-      "target": "static/img/green6.h.19933a7a.svg"
-    },
-    {
-      "label": "베테랑 아이콘",
-      "asset": "green7.286d29d5.svg",
-      "target": "static/img/green7.286d29d5.svg"
-    },
-    {
-      "label": "베테랑 아이콘 2",
-      "asset": "green7.h.f4e4240c.svg",
-      "target": "static/img/green7.h.f4e4240c.svg"
+      "label": "닉네임 변경권 or 랭크 2배권 이미지",
+      "fromUrl": "https://img.wmpvp.com/pvp/d5/1a/d51a2fefd1841df29ead03c326e94d241780042468.webp",
+      "asset": "d51a2fefd1841df29ead03c326e94d241780042468.webp",
+      "target": "static/img/d51a2fefd1841df29ead03c326e94d241780042468.webp"
     }
   ]
 }

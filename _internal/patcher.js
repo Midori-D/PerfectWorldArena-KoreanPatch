@@ -5,7 +5,7 @@ const { patchVueRules } = require("./patcher_vue.js");
 const { compileTargetsRules, patchTargetsRules, } = require("./patcher_targets.js");
 const { debugCheckPatchMappings, createStaticMappingDebugSession, } = require("./patcher_debug.js");
 const { runUpdateFlow } = require("./patcher_update.js");
-const PATCHER_VERSION = "1.0.0";
+const PATCHER_VERSION = "1.0.1";
 
 const DEBUG_MODE = process.argv.includes("--debug");
 
@@ -326,8 +326,8 @@ function loadJsonFile(fileName) {
 function loadPatchData() {
   const staticData = loadJsonFile("static.json");
   const vueData = loadJsonFile("vue.json");
-  const imageData = loadJsonFile("images.json");
-  const eventData = loadJsonFile("events.json");
+  const imagesData = loadJsonFile("images.json");
+  const eventsData = loadJsonFile("events.json");
   const targetData = loadJsonFile("targets.json");
 
   const staticMappings = (staticData.mappings || []).map((item) => [
@@ -337,7 +337,7 @@ function loadPatchData() {
 
   const vueMappings = [
     ...(vueData.mappings || []),
-    ...(eventData.mappings || []),
+    ...(eventsData.mappings || []),
   ].map((item) => {
     if (typeof item.regex !== "string") {
       return item;
@@ -353,14 +353,14 @@ function loadPatchData() {
     targetData.mappings || [],
   );
 
-  const inlineImageMappings = (imageData.inlineBase64 || []).map((item) => ({
+  const inlineImageMappings = (imagesData.inlineBase64 || []).map((item) => ({
     label: item.label || item.name,
     name: item.name,
     fromBase64Prefix: item.fromBase64Prefix,
     newImagePath: path.join(ASSETS_DIR, item.asset),
   }));
 
-  const imageAssetReplacements = (imageData.assetReplacements || []).map(
+  const imageAssetReplacements = (imagesData.assetReplacements || []).map(
     (item) => ({
       label: item.label || item.asset,
       from: path.join(ASSETS_DIR, item.asset),
@@ -375,7 +375,7 @@ function loadPatchData() {
     }),
   );
 
-  const remoteImageRedirects = (imageData.remoteImageRedirects || []).map(
+  const remoteImageRedirects = (imagesData.remoteImageRedirects || []).map(
     (item) => {
       const asset = String(item.asset || "");
       const target = String(item.target || "")
@@ -399,8 +399,8 @@ function loadPatchData() {
   log(
     `[mapping] static=${staticData.version}, ` +
       `vue=${vueData.version}, ` +
-      `images=${imageData.version}, ` +
-      `event=${eventData.version}, ` +
+      `images=${imagesData.version}, ` +
+      `event=${eventsData.version}, ` +
       `targets=${targetData.version}`,
   );
 

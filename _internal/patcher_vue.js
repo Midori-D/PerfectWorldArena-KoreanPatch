@@ -32,11 +32,16 @@ function vueMakeMapLiteral(mappings) {
     .join(",")}}`;
 }
 
-function vueLogMappings(log, rel, mappings, tag = "") {
-  const prefix = tag ? `${tag} ` : "";
-
+function vueLogMappings(log, rel, mappings, patchName = "") {
   for (const mapping of mappings) {
-    log(`[${rel}] ${prefix}` + `${mapping.zh} -> ${mapping.ko}`);
+    const typeLabel =
+      mapping.type === "text" ? "Text" : mapping.type || "Mapping";
+
+    const category = patchName
+      ? `${typeLabel}, ${patchName}`
+      : typeLabel;
+
+    log(`[${rel}] ${category} ${mapping.zh} -> ${mapping.ko}`);
   }
 }
 
@@ -96,7 +101,7 @@ function vuePatchLiteralRules(state, textMappings, log) {
         state.changed++;
         state.total++;
 
-        vueLogMappings(log, state.rel, [rule], "Text, PatchLiteral");
+        vueLogMappings(log, state.rel, [rule], "patchLiteral");
 
         return `${quote}${before}${to}${after}${quote}`;
       });
@@ -143,7 +148,7 @@ function vuePatchMainTab(state, textMappings, log) {
     state.changed++;
     state.total++;
 
-    vueLogMappings(log, state.rel, MainTabMappings);
+    vueLogMappings(log, state.rel, MainTabMappings, "patchMainTab");
 
     return (
       `${h}("p",{class:${vm}.$style["dynamic-mode__title"]},[` +
@@ -223,7 +228,7 @@ function vuePatchCheatingReportLabel(state, textMappings, log) {
     },
   );
 
-  vueLogMappings(log, state.rel, cheatingReportMappings, "Text, PatchCheatingReportLabel");
+  vueLogMappings(log, state.rel, cheatingReportMappings, `patchCheatingReportLabel, changed=${changed}`);
 }
 
 // "type": "text", "patchFriendMapName": true
@@ -293,21 +298,21 @@ function vuePatchFriendMapName(state, textMappings, log) {
   state.changed += changed;
   state.total += changed;
 
-  vueLogMappings(log, state.rel, gameMapMappings, `Text, PatchFriendMapName, changed=${changed}`);
+  vueLogMappings(log, state.rel, gameMapMappings, `patchFriendMapName, changed=${changed}`);
 }
 
-// 플레이 진입 페이지
-// patchPlayLinkTitle
-function vuePatchPlayLinkTitleRender(state, textMappings, log) {
-  const playLinkTitleMappings = textMappings.filter(
-    (mapping) => mapping.patchPlayLinkTitle,
+// "type": "text", "patchPlaySidebarTitle": true
+// 플레이 페이지 좌측 Title 패치
+function vuepatchPlaySidebarTitle(state, textMappings, log) {
+  const playSidebarTitleMappings = textMappings.filter(
+    (mapping) => mapping.patchPlaySidebarTitle,
   );
 
-  if (playLinkTitleMappings.length === 0) {
+  if (playSidebarTitleMappings.length === 0) {
     return;
   }
 
-  const playLinkTitleMapLiteral = vueMakeMapLiteral(playLinkTitleMappings);
+  const playSidebarTitleMapLiteral = vueMakeMapLiteral(playSidebarTitleMappings);
 
   if (
     !state.text.includes('staticClass:"play-link-list"') ||
@@ -319,89 +324,173 @@ function vuePatchPlayLinkTitleRender(state, textMappings, log) {
   }
 
   // s("p",{staticClass:"title"},[e._v("\n              "+e._s(t.title)+"\n            ")])
-  const playLinkTitleRenderRegex =
+  const playSidebarTitleRenderRegex =
     /([A-Za-z_$][\w$]*)\("p",\{staticClass:"title"\},\[\s*([A-Za-z_$][\w$]*)\._v\(("(?:(?:\\.|[^"\\])*)")\+\2\._s\(([A-Za-z_$][\w$]*)\.title\)\+("(?:(?:\\.|[^"\\])*)")\)\s*\]\)/g;
 
   state.text = state.text.replace(
-    playLinkTitleRenderRegex,
+    playSidebarTitleRenderRegex,
     (match, h, vm, before, item, after) => {
       state.changed++;
       state.total++;
 
-      vueLogMappings(log, state.rel, playLinkTitleMappings);
+      vueLogMappings(log, state.rel, playSidebarTitleMappings, "patchPlaySidebarTitle");
 
       return (
         `${h}("p",{staticClass:"title"},[` +
         `${vm}._v(${before}+${vm}._s((` +
-        `${playLinkTitleMapLiteral}[${item}.title]||` +
+        `${playSidebarTitleMapLiteral}[${item}.title]||` +
         `${item}.title))+${after})])`
       );
     },
   );
 }
 
-// patchPlayTitleExpression
-function vuePatchPlayTitleExpression(state, textMappings, log) {
-  const playTitleExpressionMappings = textMappings.filter(
-    (mapping) => mapping.patchPlayTitleExpression,
+// "type": "text", "patchPlayModeTitle": true
+// 플레이 페이지 진입 Title 패치
+function vuePatchPlayModeTitle(state, textMappings, log) {
+  const mappings = textMappings.filter(
+    (mapping) => mapping.patchPlayModeTitle,
   );
 
-  if (playTitleExpressionMappings.length === 0) {
+  if (mappings.length === 0) {
     return;
   }
 
-  const playTitleExpressionMapLiteral = vueMakeMapLiteral(
-    playTitleExpressionMappings,
+  const mapLiteral = vueMakeMapLiteral(mappings);
+
+  const replaceTitleExpression = (regex) => {
+    state.text = state.text.replace(regex, (match, vm, dataExpression) => {
+      state.changed++;
+      state.total++;
+
+      vueLogMappings(log, state.rel, mappings, "patchPlayModeTitle");
+
+      return (
+        `${vm}._s("en"===${vm}.locale?` +
+        `${dataExpression}.subtitle:(` +
+        `${mapLiteral}[${dataExpression}.title]||` +
+        `${dataExpression}.title))`
+      );
+    });
+  };
+
+  // e._s("en"===e.locale?e.currentData.subtitle:e.currentData.title)
+  if (
+    state.text.includes('staticClass:"play-content-title"') &&
+    state.text.includes(".currentData.subtitle") &&
+    state.text.includes(".currentData.title")
+  ) {
+    const currentTitleExpressionRe =
+      /([A-Za-z_$][\w$]*)\._s\("en"===\1\.locale\?([A-Za-z_$][\w$]*\.currentData)\.subtitle:\2\.title\)/g;
+
+    replaceTitleExpression(currentTitleExpressionRe);
+  }
+
+  // e._s("en"===e.locale?t.subtitle:t.title)
+  if (
+    state.text.includes("positionRespList") &&
+    state.text.includes('staticClass:"enter"') &&
+    state.text.includes('"enter-en"')
+  ) {
+    const enterTitleExpressionRe =
+      /([A-Za-z_$][\w$]*)\._s\("en"===\1\.locale\?([A-Za-z_$][\w$]*)\.subtitle:\2\.title\)/g;
+
+    replaceTitleExpression(enterTitleExpressionRe);
+  }
+}
+
+// "type": "text", "patchPlayModeDescription": true
+// 플레이 페이지 Description 패치
+function vuePatchPlayModeDescription(state, textMappings, log) {
+  const mappings = textMappings.filter(
+    (mapping) =>
+      mapping.patchPlayModeDescription === true &&
+      typeof mapping.zh === "string" &&
+      mapping.zh.length > 0 &&
+      typeof mapping.ko === "string",
   );
 
+  if (mappings.length === 0) {
+    return;
+  }
+
   if (
-    !state.text.includes("positionRespList") ||
-    !state.text.includes('staticClass:"enter"') ||
-    !state.text.includes('"enter-en"') ||
-    !state.text.includes(".subtitle") ||
-    !state.text.includes(".title")
+    !state.text.includes('staticClass:"play-content-desc"') ||
+    !state.text.includes('staticClass:"desc"') ||
+    !state.text.includes(".currentData.desc")
   ) {
     return;
   }
 
+  // 매핑과 API 문장의 공백 형태를 동일하게 맞춘다.
+  const normalizedMappings = mappings.map((mapping) => ({
+    ...mapping,
+    zh: mapping.zh
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  }));
+
+  const mapLiteral = vueMakeMapLiteral(normalizedMappings);
+
+  /*
+   * API 설명의 HTML을 임시 요소에 넣어 엔티티를 해석한다.
+   *
+   * 예:
+   * &ldquo;热浪争锋&rdquo; → “热浪争锋”
+   * &nbsp;                → 일반 공백
+   */
+  const translateHtmlExpression =
+    `(function(v,m){` +
+    `v=String(v==null?"":v);` +
+    `var d=document.createElement("div");` +
+    `d.innerHTML=v;` +
+    `var k=String(d.textContent||"")` +
+    `.replace(/\\u00a0/g," ")` +
+    `.replace(/\\s+/g," ")` +
+    `.trim();` +
+    `var t=m[k];` +
+    `if(t===void 0)return v;` +
+    `if(d.children.length===1){` +
+    `d.children[0].textContent=t;` +
+    `return d.innerHTML` +
+    `}` +
+    `return t` +
+    `})`;
+
   // 원본:
-  // e._s("en"===e.locale?t.subtitle:t.title)
-  const originalRe =
-    /([A-Za-z_$][\w$]*)\._s\(("en"===[A-Za-z_$][\w$]*\.locale\?[A-Za-z_$][\w$]*\.subtitle:([A-Za-z_$][\w$]*)\.title)\)/g;
+  // innerHTML:e._s(e.currentData.desc)
+  const descriptionRe =
+    /(staticClass:"desc"\s*,\s*domProps:\{\s*innerHTML:)([A-Za-z_$][\w$]*)\._s\((\2\.currentData\.desc)\)(\s*\}\s*\})/g;
 
-  state.text = state.text.replace(originalRe, (match, vm, expr, item) => {
-    state.changed++;
-    state.total++;
+  let changed = 0;
 
-    vueLogMappings(log, state.rel, playTitleExpressionMappings);
+  state.text = state.text.replace(
+    descriptionRe,
+    (match, before, vm, descriptionExpression, after) => {
+      changed++;
+      state.changed++;
+      state.total++;
 
-    return (
-      `${vm}._s("en"===${vm}.locale?` +
-      `${item}.subtitle:(` +
-      `${playTitleExpressionMapLiteral}[${item}.title]||` +
-      `${item}.title))`
-    );
-  });
+      return (
+        `${before}${vm}._s(` +
+        `${translateHtmlExpression}(` +
+        `${descriptionExpression},${mapLiteral}` +
+        `))${after}`
+      );
+    },
+  );
 
-  // 이미 한 번 잘못 패치된 경우 복구:
-  // e._s(({"旧map":...}["en"===e.locale?t.subtitle:t.title]||
-  // "en"===e.locale?t.subtitle:t.title))
-  const alreadyPatchedRe =
-    /([A-Za-z_$][\w$]*)\._s\(\(\{[^{}]*\}\[("en"===[A-Za-z_$][\w$]*\.locale\?[A-Za-z_$][\w$]*\.subtitle:([A-Za-z_$][\w$]*)\.title)\]\|\|\2\)\)/g;
+  if (changed === 0) {
+    return;
+  }
 
-  state.text = state.text.replace(alreadyPatchedRe, (match, vm, expr, item) => {
-    state.changed++;
-    state.total++;
-
-    vueLogMappings(log, state.rel, playTitleExpressionMappings);
-
-    return (
-      `${vm}._s("en"===${vm}.locale?` +
-      `${item}.subtitle:(` +
-      `${playTitleExpressionMapLiteral}[${item}.title]||` +
-      `${item}.title))`
-    );
-  });
+  vueLogMappings(
+    log,
+    state.rel,
+    mappings,
+    `patchPlayModeDescription, changed=${changed}`,
+  );
 }
 
 // patchMapSelectName
@@ -670,12 +759,11 @@ function patchVueRules(state, mappings, log = console.log) {
   vuePatchLiteralRules(state, textMappings, log);
   vuePatchMainTab(state, textMappings, log);
   vuePatchCheatingReportLabel(state, textMappings, log);
-
   vuePatchFriendMapName(state, mappings, log);
+  vuepatchPlaySidebarTitle(state, mappings, log);
+  vuePatchPlayModeTitle(state, mappings, log);
 
-  vuePatchPlayLinkTitleRender(state, mappings, log);
-
-  vuePatchPlayTitleExpression(state, mappings, log);
+  vuePatchPlayModeDescription(state, textMappings, log);
 
   vuePatchMapSelectName(state, mappings, log);
 

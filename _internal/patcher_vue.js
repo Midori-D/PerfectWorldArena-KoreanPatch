@@ -37,9 +37,7 @@ function vueLogMappings(log, rel, mappings, patchName = "") {
     const typeLabel =
       mapping.type === "text" ? "Text" : mapping.type || "Mapping";
 
-    const category = patchName
-      ? `${typeLabel}, ${patchName}`
-      : typeLabel;
+    const category = patchName ? `${typeLabel}, ${patchName}` : typeLabel;
 
     log(`[${rel}] ${category} ${mapping.zh} -> ${mapping.ko}`);
   }
@@ -78,8 +76,7 @@ function vuePatchLiteralRules(state, textMappings, log) {
 
     return variants.filter(
       (item, index, array) =>
-        item.from &&
-        array.findIndex((other) => other.from === item.from) === index,
+        item.from && array.findIndex((other) => other.from === item.from) === index,
     );
   }
 
@@ -91,10 +88,7 @@ function vuePatchLiteralRules(state, textMappings, log) {
     for (const { from, to } of variants) {
       const escaped = escapeRegExp(from);
 
-      const targetRe = new RegExp(
-        `(["'\`])` + `(${ws})` + `${escaped}` + `(${ws})` + `\\1`,
-        "g",
-      );
+      const targetRe = new RegExp( `(["'\`])` + `(${ws})` + `${escaped}` + `(${ws})` + `\\1`, "g", );
 
       segment = segment.replace(targetRe, (match, quote, before, after) => {
         changed++;
@@ -107,10 +101,7 @@ function vuePatchLiteralRules(state, textMappings, log) {
       });
     }
 
-    return {
-      text: segment,
-      changed,
-    };
+    return { text: segment, changed, };
   }
 
   for (const rule of rules) {
@@ -312,7 +303,9 @@ function vuepatchPlaySidebarTitle(state, textMappings, log) {
     return;
   }
 
-  const playSidebarTitleMapLiteral = vueMakeMapLiteral(playSidebarTitleMappings);
+  const playSidebarTitleMapLiteral = vueMakeMapLiteral(
+    playSidebarTitleMappings,
+  );
 
   if (
     !state.text.includes('staticClass:"play-link-list"') ||
@@ -348,9 +341,7 @@ function vuepatchPlaySidebarTitle(state, textMappings, log) {
 // "type": "text", "patchPlayModeTitle": true
 // 플레이 페이지 진입 Title 패치
 function vuePatchPlayModeTitle(state, textMappings, log) {
-  const mappings = textMappings.filter(
-    (mapping) => mapping.patchPlayModeTitle,
-  );
+  const mappings = textMappings.filter((mapping) => mapping.patchPlayModeTitle);
 
   if (mappings.length === 0) {
     return;
@@ -422,7 +413,6 @@ function vuePatchPlayModeDescription(state, textMappings, log) {
     return;
   }
 
-  // 매핑과 API 문장의 공백 형태를 동일하게 맞춘다.
   const normalizedMappings = mappings.map((mapping) => ({
     ...mapping,
     zh: mapping.zh
@@ -433,13 +423,6 @@ function vuePatchPlayModeDescription(state, textMappings, log) {
 
   const mapLiteral = vueMakeMapLiteral(normalizedMappings);
 
-  /*
-   * API 설명의 HTML을 임시 요소에 넣어 엔티티를 해석한다.
-   *
-   * 예:
-   * &ldquo;热浪争锋&rdquo; → “热浪争锋”
-   * &nbsp;                → 일반 공백
-   */
   const translateHtmlExpression =
     `(function(v,m){` +
     `v=String(v==null?"":v);` +
@@ -458,8 +441,7 @@ function vuePatchPlayModeDescription(state, textMappings, log) {
     `return t` +
     `})`;
 
-  // 원본:
-  // innerHTML:e._s(e.currentData.desc)
+  // e._s(e.currentData.desc) > e._s(translateHtmlExpression(e.currentData.desc, t))
   const descriptionRe =
     /(staticClass:"desc"\s*,\s*domProps:\{\s*innerHTML:)([A-Za-z_$][\w$]*)\._s\((\2\.currentData\.desc)\)(\s*\}\s*\})/g;
 
@@ -485,12 +467,85 @@ function vuePatchPlayModeDescription(state, textMappings, log) {
     return;
   }
 
-  vueLogMappings(
-    log,
-    state.rel,
-    mappings,
-    `patchPlayModeDescription, changed=${changed}`,
+  vueLogMappings(log, state.rel, mappings, `patchPlayModeDescription, changed=${changed}`);
+}
+
+// "type": "text", "patchPlayModeDescription2": true
+// 플레이 페이지 Description 마우스 오버 패치
+function vuePatchPlayModeDescription2(state, textMappings, log) {
+  const mappings = textMappings.filter(
+    (mapping) =>
+      mapping.patchPlayModeDescription2 === true &&
+      typeof mapping.zh === "string" &&
+      mapping.zh.length > 0 &&
+      typeof mapping.ko === "string",
   );
+
+  if (mappings.length === 0) {
+    return;
+  }
+
+  if (
+    !state.text.includes('staticClass:"gameplay-intro-content-mod"') ||
+    !state.text.includes(".currentData.gameplayIntroContent") ||
+    !state.text.includes(".currentData.gameplayIntroEnabled")
+  ) {
+    return;
+  }
+
+  const normalizedMappings = mappings.map((mapping) => ({
+    ...mapping,
+    zh: mapping.zh
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  }));
+
+  const mapLiteral = vueMakeMapLiteral(normalizedMappings);
+
+  const translateHtmlExpression =
+    `(function(v,m){` +
+    `v=String(v==null?"":v);` +
+    `var d=document.createElement("div");` +
+    `d.innerHTML=v;` +
+    `var k=String(d.textContent||"")` +
+    `.replace(/\\u00a0/g," ")` +
+    `.replace(/\\s+/g," ")` +
+    `.trim();` +
+    `var t=m[k];` +
+    `if(t===void 0)return v;` +
+    `if(d.children.length===1){` +
+    `d.children[0].innerHTML=t;` +
+    `return d.innerHTML` +
+    `}` +
+    `return t` +
+    `})`;
+
+  // innerHTML:e._s(e.currentData.gameplayIntroContent)
+  const gameplayIntroRe =
+    /(staticClass:"gameplay-intro-content-mod"\s*,\s*domProps:\{\s*innerHTML:)([A-Za-z_$][\w$]*)\._s\((\2\.currentData\.gameplayIntroContent)\)(\s*\}\s*\})/g;
+
+  let changed = 0;
+
+  state.text = state.text.replace(
+    gameplayIntroRe,
+    (match, before, vm, contentExpression, after) => {
+      changed++;
+      state.changed++;
+      state.total++;
+
+      return (
+        `${before}${vm}._s(` +
+        `${translateHtmlExpression}(` +
+        `${contentExpression},${mapLiteral}` +
+        `))${after}`
+      );
+    },
+  );
+
+  if (changed > 0) {
+    vueLogMappings( log, state.rel, mappings, `patchPlayModeDescription2, changed=${changed}`, );
+  }
 }
 
 // patchMapSelectName
@@ -762,8 +817,8 @@ function patchVueRules(state, mappings, log = console.log) {
   vuePatchFriendMapName(state, mappings, log);
   vuepatchPlaySidebarTitle(state, mappings, log);
   vuePatchPlayModeTitle(state, mappings, log);
-
   vuePatchPlayModeDescription(state, textMappings, log);
+  vuePatchPlayModeDescription2(state, textMappings, log);
 
   vuePatchMapSelectName(state, mappings, log);
 

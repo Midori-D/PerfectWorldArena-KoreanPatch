@@ -5,7 +5,7 @@ const { patchVueRules } = require("./patcher_vue.js");
 const { compileTargetsRules, patchTargetsRules, } = require("./patcher_targets.js");
 const { debugCheckPatchMappings, createStaticMappingDebugSession, } = require("./patcher_debug.js");
 const { runUpdateFlow } = require("./patcher_update.js");
-const PATCHER_VERSION = "1.0.1";
+const PATCHER_VERSION = "1.0.2";
 
 const DEBUG_MODE = process.argv.includes("--debug");
 

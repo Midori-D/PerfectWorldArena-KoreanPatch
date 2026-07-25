@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "2026.07.23.1",
+  "version": "2026.07.25.1",
   "mappings": [
     { "section": "런처 실행 페이지", "type": "text", "patchLiteral": true, "zh": "扫码登录", "ko": "QR 로그인" },
     { "section": "런처 실행 페이지", "type": "text", "patchLiteral": true, "zh": "使用手机自带扫码即可下载APP", "ko": "휴대폰으로 스캔하여 앱 다운로드" },
@@ -20,6 +20,7 @@
     { "section": "메인 페이지 - PAC 탭", "type": "text", "patchCheatingReportLabel": true, "zh": "PAC昨日封禁", "ko": "어제 PAC 제재" },
     { "section": "메인 페이지 - PAC 탭", "type": "text", "patchCheatingReportLabel": true, "zh": "其他今日封禁", "ko": "오늘 기타 제재" },
     { "section": "메인 페이지 - PAC 탭", "type": "text", "patchCheatingReportLabel": true, "zh": "其他昨日封禁", "ko": "어제 기타 제재" },
+    { "section": "메인 페이지 - 마우스 오버", "type": "text", "patchLiteral": true, "zh": "未开启官匹优先", "ko": "공식 매치 우선 매칭이 꺼져 있습니다." },
 
     { "section": "친구 탭", "type": "text", "patchLiteral": true, "zh": "实时观战", "ko": "실시간 관전" },
     { "section": "친구 탭", "type": "text", "patchLiteral": true, "zh": "我的公会", "ko": "내 길드" },
@@ -78,6 +79,7 @@
     { "section": "플레이 페이지 - 경쟁 모드 진입", "type": "text", "patchPlayModeTitle": true, "zh": "国服官匹", "ko": "중국 서버 공식매칭" },
     { "section": "플레이 페이지 - 경쟁 모드 진입", "type": "text", "patchPlayModeTitle": true, "zh": "天梯单挑", "ko": "랭크 1대1" },
     { "section": "플레이 페이지 - 경쟁 모드 진입", "type": "text", "patchPlayModeTitle": true, "zh": "天梯搭档", "ko": "랭크 듀오" },
+    { "section": "플레이 페이지 - 경쟁 모드 진입 - 마우스 오버", "type": "text", "patchPlayModeDescription2": true, "zh": "比赛共14回合，优先取得8分者胜利。此模式新增“快速匹配”功能，比赛结束后，游戏内队长按F1可开启匹配，无需退游戏即可快速开启下一把~", "ko": "경기는 총 14라운드로 진행되며, 먼저 8점을 획득한 팀이 승리합니다. 이 모드에는 <strong>“빠른 매칭”</strong> 기능이 새로 추가되었습니다. 경기 종료 후 게임 내 팀장이 F1을 누르면 매칭을 시작할 수 있어, 게임을 종료하지 않고도 다음 경기를 빠르게 시작할 수 있습니다~" },
 
     { "section": "플레이 페이지 - 연습 모드 진입", "type": "text", "patchPlayModeTitle": true, "zh": "死斗模式", "ko": "데스매치" },
     { "section": "플레이 페이지 - 연습 모드 진입", "type": "text", "patchPlayModeTitle": true, "zh": "实战1V1", "ko": "실전 1대1" },

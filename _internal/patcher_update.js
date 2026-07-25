@@ -92,8 +92,6 @@ function validateManifest(manifest) {
     );
   }
 
-  parseVersion(manifest.mappingVersion, "mappingVersion");
-
   parseVersion(manifest.minimumPatcherVersion, "minimumPatcherVersion");
 
   parseVersion(manifest.latestPatcherVersion, "latestPatcherVersion");
@@ -141,17 +139,11 @@ function makeNoCacheUrl(value) {
 
 function openUrlInBrowser(url, warn = console.warn) {
   try {
-    const parsedUrl = validateHttpsUrl(
-      url,
-      "패처 다운로드",
-    );
+    const parsedUrl = validateHttpsUrl(url, "패처 다운로드");
 
     const child = spawn(
       "rundll32.exe",
-      [
-        "url.dll,FileProtocolHandler",
-        parsedUrl.href,
-      ],
+      ["url.dll,FileProtocolHandler", parsedUrl.href],
       {
         detached: true,
         stdio: "ignore",
@@ -160,20 +152,14 @@ function openUrlInBrowser(url, warn = console.warn) {
     );
 
     child.once("error", (err) => {
-      warn(
-        `[warn:update] 브라우저를 열지 못했습니다: ` +
-          `${err.message}`,
-      );
+      warn(`[warn:update] 브라우저를 열지 못했습니다: ` + `${err.message}`);
     });
 
     child.unref();
 
     return true;
   } catch (err) {
-    warn(
-      `[warn:update] GitHub 주소를 열 수 없습니다: ` +
-        `${err.message}`,
-    );
+    warn(`[warn:update] GitHub 주소를 열 수 없습니다: ` + `${err.message}`);
 
     return false;
   }
@@ -243,6 +229,88 @@ async function fetchJson(url, options) {
   }
 }
 
+function validateMappingJson(text, filePath) {
+  let parsed;
+
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`${filePath} 검증 실패: ${err.message}`);
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${filePath} 검증 실패: 최상위 값이 객체가 아닙니다.`);
+  }
+
+  const version = String(parsed.version ?? "")
+    .trim()
+    .replace(/^v/i, "");
+
+  parseVersion(version, `${filePath}.version`);
+
+  return version;
+}
+
+async function inspectMappingFiles({
+  rootDir,
+  remoteManifest,
+  timeoutMs,
+  maxFileSize,
+  fetchImpl,
+}) {
+  return Promise.all(
+    Object.entries(remoteManifest.files).map(async ([name, file]) => {
+      const targetPath = resolveInsideRoot(rootDir, file.path);
+
+      // 원격 JSON을 내려받고 version을 확인합니다.
+      const text = await fetchText(file.url, {
+        timeoutMs,
+        maxFileSize,
+        fetchImpl,
+      });
+
+      const remoteVersion = validateMappingJson(text, file.path);
+
+      let localVersion = null;
+      let localStatus = "missing";
+      let localError = "";
+
+      if (fs.existsSync(targetPath)) {
+        try {
+          const localText = fs
+            .readFileSync(targetPath, "utf8")
+            .replace(/^\uFEFF/, "");
+
+          localVersion = validateMappingJson(localText, file.path);
+          localStatus = "valid";
+        } catch (err) {
+          localStatus = "invalid";
+          localError = err.message;
+        }
+      }
+
+      // 파일이 없거나 손상된 경우에는 업데이트 대상으로 처리합니다.
+      const versionComparison =
+        localStatus === "valid"
+          ? compareVersions(remoteVersion, localVersion)
+          : 1;
+
+      return {
+        name,
+        path: file.path,
+        targetPath,
+        text,
+        localVersion,
+        remoteVersion,
+        localStatus,
+        localError,
+        versionComparison,
+        updateAvailable: versionComparison > 0,
+      };
+    }),
+  );
+}
+
 async function checkForUpdates({
   rootDir = path.resolve(__dirname, ".."),
   localManifestPath = path.join(__dirname, "update_manifest.json"),
@@ -268,13 +336,17 @@ async function checkForUpdates({
     }),
   );
 
-  const localMappingVersion = localManifest?.mappingVersion ?? "0";
-
-  const remoteMappingVersion = remoteManifest.mappingVersion;
-
   const minimumPatcherVersion = remoteManifest.minimumPatcherVersion;
 
   const latestPatcherVersion = remoteManifest.latestPatcherVersion;
+
+  const mappingFiles = await inspectMappingFiles({
+    rootDir,
+    remoteManifest,
+    timeoutMs,
+    maxFileSize,
+    fetchImpl,
+  });
 
   return {
     rootDir,
@@ -282,14 +354,12 @@ async function checkForUpdates({
     localManifest,
     remoteManifest,
     currentPatcherVersion,
-    localMappingVersion,
-    remoteMappingVersion,
+    mappingFiles,
     minimumPatcherVersion,
     latestPatcherVersion,
     patcherUrl: DEFAULT_PATCHER_URL,
 
-    mappingUpdateAvailable:
-      compareVersions(remoteMappingVersion, localMappingVersion) > 0,
+    mappingUpdateAvailable: mappingFiles.some((file) => file.updateAvailable),
 
     patcherUpdateAvailable:
       compareVersions(latestPatcherVersion, currentPatcherVersion) > 0,
@@ -308,44 +378,15 @@ async function checkForUpdates({
   };
 }
 
-async function downloadAndValidateMappings(checkResult) {
-  const downloaded = [];
-
-  for (const [name, file] of Object.entries(checkResult.remoteManifest.files)) {
-    const targetPath = resolveInsideRoot(checkResult.rootDir, file.path);
-
-    const text = await fetchText(file.url, {
-      timeoutMs: checkResult.timeoutMs,
-      maxFileSize: checkResult.maxFileSize,
-      fetchImpl: checkResult.fetchImpl,
-    });
-
-    try {
-      const parsed = JSON.parse(text);
-
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("최상위 값이 객체가 아닙니다.");
-      }
-    } catch (err) {
-      throw new Error(`${file.path} 검증 실패: ${err.message}`);
-    }
-
-    downloaded.push({
-      name,
-      path: file.path,
-      targetPath,
-      text,
-    });
-  }
-
-  return downloaded;
+function getPendingMappingFiles(checkResult) {
+  return checkResult.mappingFiles.filter((file) => file.updateAvailable);
 }
 
-function writeUpdatesWithRollback(downloaded, manifestPath, manifest) {
+function writeUpdatesWithRollback(pendingFiles, manifestPath, manifest) {
   const token = `${process.pid}-${Date.now()}`;
 
   const writes = [
-    ...downloaded.map((file) => ({
+    ...pendingFiles.map((file) => ({
       label: file.path,
       targetPath: file.targetPath,
       text: file.text,
@@ -419,18 +460,20 @@ async function applyMappingUpdate(checkResult) {
   }
 
   /*
-   * 모든 파일을 먼저 다운로드하고 JSON을 검증합니다.
-   * 하나라도 잘못됐다면 기존 파일은 건드리지 않습니다.
+   * checkForUpdates()에서 모든 원격 JSON의 내용과 version을
+   * 이미 내려받아 검증했습니다.
+   *
+   * 따라서 여기서는 실제로 버전이 오른 파일만 교체합니다.
    */
-  const downloaded = await downloadAndValidateMappings(checkResult);
+  const pendingFiles = getPendingMappingFiles(checkResult);
 
   writeUpdatesWithRollback(
-    downloaded,
+    pendingFiles,
     checkResult.localManifestPath,
     checkResult.remoteManifest,
   );
 
-  return downloaded.map((file) => file.path);
+  return pendingFiles.map((file) => file.path);
 }
 
 async function askToUpdate(question) {
@@ -479,10 +522,29 @@ async function runUpdateFlow({
     };
   }
 
-  log(
-    `[update] mapping: ${result.localMappingVersion} -> ` +
-      `${result.remoteMappingVersion}`,
-  );
+  for (const file of result.mappingFiles) {
+    const localVersion =
+      file.localStatus === "missing"
+        ? "없음"
+        : file.localStatus === "invalid"
+          ? "검증 실패"
+          : file.localVersion;
+
+    const suffix =
+      file.versionComparison < 0 ? " (로컬 버전이 더 높아 유지)" : "";
+
+    log(
+      `[update] ${file.name}: ${localVersion} -> ` +
+        `${file.remoteVersion}${suffix}`,
+    );
+
+    if (file.localStatus === "invalid") {
+      warn(
+        `[warn:update] ${file.path}의 로컬 파일이 올바르지 않아 ` +
+          `업데이트 대상으로 지정합니다: ${file.localError}`,
+      );
+    }
+  }
 
   log(
     `[update] patcher: ${result.currentPatcherVersion} ` +
@@ -510,7 +572,7 @@ async function runUpdateFlow({
 
     warn(`[update:required] GitHub: ${result.patcherUrl}`);
 
-    warn( "[update:required] GitHub 페이지를 브라우저로 엽니다.", );
+    warn("[update:required] GitHub 페이지를 브라우저로 엽니다.");
 
     openUrlInBrowser(result.patcherUrl, warn);
 
@@ -548,8 +610,10 @@ async function runUpdateFlow({
   }
 
   log(
-    `[update:available] 새 번역 데이터 ` +
-      `${result.remoteMappingVersion}이 있습니다.`,
+    `[update:available] 업데이트할 번역 데이터 ` +
+      `${
+        result.mappingFiles.filter((file) => file.updateAvailable).length
+      }개가 있습니다.`,
   );
 
   const shouldUpdate =
@@ -578,8 +642,7 @@ async function runUpdateFlow({
     }
 
     log(
-      `[update:success] 번역 데이터를 ` +
-        `${result.remoteMappingVersion}으로 ` +
+      `[update:success] 번역 데이터 ${updatedFiles.length}개 파일을 ` +
         "업데이트했습니다.",
     );
 

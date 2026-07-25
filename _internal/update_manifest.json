@@ -1,9 +1,8 @@
 {
   "manifestVersion": 1,
-  "mappingVersion": "2026.07.20.1",
   "minimumPatcherVersion": "1.0.1",
-  "latestPatcherVersion": "1.0.1",
-  "message": "2026.07.23 완미세계 업데이트 대응 번역 데이터입니다.",
+  "latestPatcherVersion": "1.0.2",
+  "message": "2026.07.25 완미세계 업데이트 대응 패치입니다.",
   "files": {
     "static": {
       "url": "https://raw.githubusercontent.com/Midori-D/PerfectWorldArena-KoreanPatch/main/mappings/static.json",
